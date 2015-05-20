@@ -25,7 +25,7 @@ set -e
 
 case "$1" in
     configure)
-        adduser --system -d /tmp signing-milter
+        adduser --system --home /tmp signing-milter
         chgrp --changes signing-milter /etc/signing-milter/
         chmod --changes 0750 /etc/signing-milter/
 
