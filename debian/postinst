@@ -25,21 +25,14 @@ set -e
 
 case "$1" in
     configure)
-        . /usr/share/dv-baseconfig/account-management.sh
-
-        _dv_check_or_create_group signing-milter 30053
-        _dv_check_or_create_user signing-milter 30053 30053 'Signatur-Milter' /etc/signing-milter
-
-        echo " - setzte Rechte fuer /etc/signing-milter"
+        adduser --system -d /tmp signing-milter
         chgrp --changes signing-milter /etc/signing-milter/
         chmod --changes 0750 /etc/signing-milter/
 
         if [ ! -L /etc/service/signing-milter ]; then
-            echo " - richte signing-milter ein ( starte aber noch nicht )"
             touch /var/lib/supervise/signing-milter/down
             ln -s ../../var/lib/supervise/signing-milter /etc/service/
         else
-            echo " - starte signing-milter neu"
             svc -t /var/lib/supervise/signing-milter || :
         fi
     ;;

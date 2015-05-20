@@ -1,31 +1,37 @@
+signing-milter (2015052001) stable; urgency=medium
+
+  * Debian control file auf standard adduser angepasst
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Thu, 20 May 2015 11:33:32 +0200
+
 signing-milter (2015030801) stable; urgency=medium
 
   * Schalter "-b" entfernt
-  * Headerzeilen immer mit \r\n umbrechen 
+  * Headerzeilen immer mit \r\n umbrechen
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 08 Mar 2015 22:19:36 +0100
 
 signing-milter (2015030601) stable; urgency=medium
 
-  * debian/control: Jessie kompatibel 
+  * debian/control: Jessie kompatibel
 
  -- Andreas Schulze <debian@andreasschulze.de>  Fri, 06 Mar 2015 23:43:36 +0100
 
 signing-milter (2013090401) stable; urgency=low
 
-  * debian/control: Wheezy kompatibel 
+  * debian/control: Wheezy kompatibel
 
  -- Andreas Schulze <debian@andreasschulze.de>  Wed, 04 Sep 2013 21:24:29 +0200
 
 signing-milter (2013031101) stable; urgency=low
 
-  * break_after_semikolon: Zeilenumbrueche im Header nur mit \n statt \r\n 
+  * break_after_semikolon: Zeilenumbrueche im Header nur mit \n statt \r\n
 
  -- Andreas Schulze <debian@andreasschulze.de>  Mon, 11 Mar 2013 14:46:33 +0100
 
 signing-milter (2013030801) stable; urgency=low
 
-  * modetable kennt "keep" 
+  * modetable kennt "keep"
   * Debug-Dateien werden in der korrekten Laenge geschrieben
   * PKCS7_CRLFEOL
 
@@ -52,32 +58,32 @@ signing-milter (2012092601) stable; urgency=low
 
 signing-milter (2012090601) stable; urgency=low
 
-  * Versuch, Speicherfehler zu bereinigen 
+  * Versuch, Speicherfehler zu bereinigen
 
  -- Andreas Schulze <debian@andreasschulze.de>  Tue, 04 Sep 2012 09:05:44 +0200
 
 signing-milter (2012073101) stable; urgency=low
 
-  * Support fuer Zwischenzertifikatsketten 
+  * Support fuer Zwischenzertifikatsketten
 
  -- Andreas Schulze <debian@andreasschulze.de>  Tue, 31 Jul 2012 15:19:22 +0200
 
 signing-milter (2011091801) stable; urgency=low
 
-  * /debian ist SQUEEZE kompatibel 
+  * /debian ist SQUEEZE kompatibel
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 18 Sep 2011 22:00:04 +0200
 
 signing-milter (2011053001) stable; urgency=low
 
-  * GPL2 
+  * GPL2
   * Manpage ueberarbeitet
 
  -- Andreas Schulze <debian@andreasschulze.de>  Mon, 30 May 2011 19:23:02 +0200
 
 signing-milter (2011052901) stable; urgency=low
 
-  * Lizenz- und Copyright in jeder Datei 
+  * Lizenz- und Copyright in jeder Datei
   * main.c/output_statistics() -> stats.c/output_stats()
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 29 May 2011 10:41:51 +0200
@@ -90,32 +96,32 @@ signing-milter (2011030101) stable; urgency=low
 
 signing-milter (2010123001) stable; urgency=low
 
-  * debian/postinst legt Account signing-milter an 
+  * debian/postinst legt Account signing-milter an
 
  -- Andreas Schulze <debian@andreasschulze.de>  Thu, 30 Dec 2010 13:35:46 +0100
 
 signing-milter (2010122901) stable; urgency=low
 
-  * Support fuer SignerFromHeader 
+  * Support fuer SignerFromHeader
   * Manpage erweitert
 
  -- Andreas Schulze <debian@andreasschulze.de>  Wed, 29 Dec 2010 09:24:00 +0100
 
 signing-milter (2010122801) stable; urgency=low
 
-  * Lookuptabelle fuer Opaque Signing wirklich optional 
+  * Lookuptabelle fuer Opaque Signing wirklich optional
 
  -- Andreas Schulze <debian@andreasschulze.de>  Tue, 28 Dec 2010 06:30:42 +0100
 
 signing-milter (2010122701) stable; urgency=low
 
-  * optionale Lookuptabelle fuer Opaque Signing 
+  * optionale Lookuptabelle fuer Opaque Signing
 
  -- Andreas Schulze <debian@andreasschulze.de>  Mon, 27 Dec 2010 13:52:18 +0100
 
 signing-milter (2010102701) stable; urgency=low
 
-  * Syntaxfehler in cron.daily bereinigt 
+  * Syntaxfehler in cron.daily bereinigt
 
  -- Andreas Schulze <debian@andreasschulze.de>  Wed, 27 Oct 2010 06:21:47 +0200
 
@@ -129,7 +135,7 @@ signing-milter (2010102601) stable; urgency=low
 
 signing-milter (2010102501) stable; urgency=low
 
-  * korrekte Zeitmessung 
+  * korrekte Zeitmessung
   * mapfile heißt nun signingtable
 
  -- Andreas Schulze <debian@andreasschulze.de>  Mon, 25 Oct 2010 21:11:16 +0200
@@ -145,7 +151,7 @@ signing-milter (2010101901) stable; urgency=low
 signing-milter (2010101801) stable; urgency=low
 
   * Workaround fuer altes OpenSSL entfernt. Make- und SPEC-File
-    kommen mit separatem OpenSSL klar ( fuer SLES9 z.B. ) 
+    kommen mit separatem OpenSSL klar ( fuer SLES9 z.B. )
   * dump_pkcs7flags.c: Abkuerzung, falls LogLevel != LOG_DEBUG
 
  -- Andreas Schulze <debian@andreasschulze.de>  Mon, 18 Oct 2010 08:34:02 +0200
@@ -159,7 +165,7 @@ signing-milter (2010101701) stable; urgency=low
 
 signing-milter (2010101601) stable; urgency=low
 
-  * callback.h: openssl/pkcs7.h includen  
+  * callback.h: openssl/pkcs7.h includen
   * Makefile: Ziel "tar" entfernt
   * ./VERSION damit auch unnoetig
   * Statistikausgabe erweitert
@@ -169,20 +175,20 @@ signing-milter (2010101601) stable; urgency=low
 
 signing-milter (2010101501) stable; urgency=low
 
-  * Fehlermeldung in callback_eom mit queueid loggen 
+  * Fehlermeldung in callback_eom mit queueid loggen
   * signig-milter wird mit nice -n 19 gestartet
 
  -- Andreas Schulze <debian@andreasschulze.de>  Fri, 15 Oct 2010 20:09:10 +0200
 
 signing-milter (2010092801) stable; urgency=low
 
-  * Funktion zum Speichern von plain- und signed- Daten 
+  * Funktion zum Speichern von plain- und signed- Daten
 
  -- Andreas Schulze <debian@andreasschulze.de>  Tue, 28 Sep 2010 21:32:59 +0200
 
 signing-milter (2010091601) stable; urgency=low
 
-  * viele Funktionen nach utils/ separiert 
+  * viele Funktionen nach utils/ separiert
 
  -- Andreas Schulze <debian@andreasschulze.de>  Thu, 16 Sep 2010 20:51:45 +0200
 
@@ -194,31 +200,31 @@ signing-milter (2010082501) stable; urgency=low
 
 signing-milter (2010082201) stable; urgency=low
 
-  * Version 20100822 
+  * Version 20100822
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 22 Aug 2010 11:07:19 +0200
 
 signing-milter (2010082101) stable; urgency=low
 
-  * Content-Header des signierten Blocks ebenfalls umgebrochen 
+  * Content-Header des signierten Blocks ebenfalls umgebrochen
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sat, 21 Aug 2010 18:43:28 +0200
 
 signing-milter (2010081702) stable; urgency=low
 
-  * Anpassungen am SPEC-File 
+  * Anpassungen am SPEC-File
 
  -- Andreas Schulze <debian@andreasschulze.de>  Tue, 17 Aug 2010 10:43:15 +0200
 
 signing-milter (2010081503) stable; urgency=low
 
-  * Version-Nummer aktualisiert 
+  * Version-Nummer aktualisiert
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 15 Aug 2010 23:33:55 +0200
 
 signing-milter (2010081502) stable; urgency=low
 
-  * debian/postinst: Logprozess gibt's nicht mehr 
+  * debian/postinst: Logprozess gibt's nicht mehr
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 15 Aug 2010 23:30:19 +0200
 
@@ -245,20 +251,20 @@ signing-milter (20100806) stable; urgency=low
 
 signing-milter (0.9.41+2010041401) stable; urgency=low
 
-  * Typos bereinigt 
+  * Typos bereinigt
 
  -- Andreas Schulze <debian@andreasschulze.de>  Wed, 14 Apr 2010 17:55:08 +0200
 
 signing-milter (0.9.4+2010041101) stable; urgency=low
 
-  * debian/rules: Pfad zum supervise-log2syslog korrekt 
+  * debian/rules: Pfad zum supervise-log2syslog korrekt
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 11 Apr 2010 11:08:41 +0200
 
 signing-milter (0.9.4+2010040701) stable; urgency=low
 
   * typo in der Manpage bereinigt
-  * Versionsinfo überall 0.9.4 
+  * Versionsinfo überall 0.9.4
   * Miltertimeout via -t einstellbar
   * Loglevel muss zw. 0 und 7 liegen
 
@@ -298,7 +304,7 @@ signing-milter (0.9.3+2010032402) stable; urgency=low
 
 signing-milter (0.9.3+2010032401) stable; urgency=low
 
-  * dict_cdb.c: leere envelope wird nun auch gefunden 
+  * dict_cdb.c: leere envelope wird nun auch gefunden
 
  -- Andreas Schulze <debian@andreasschulze.de>  Wed, 24 Mar 2010 10:45:54 +0100
 
@@ -311,7 +317,7 @@ signing-milter (0.9.3+2010032301) stable; urgency=low
 
 signing-milter (0.9.3+2010032201) stable; urgency=low
 
-  * korrekter Umgang mit openssl-0.9.7d aus SLES9 
+  * korrekter Umgang mit openssl-0.9.7d aus SLES9
 
  -- Andreas Schulze <debian@andreasschulze.de>  Mon, 22 Mar 2010 15:38:53 +0100
 
@@ -325,44 +331,44 @@ signing-milter (0.9.2+2010032202) stable; urgency=low
 signing-milter (0.9.2+2010032201) stable; urgency=low
 
   * specfile nachgezogen
-  * Rechte fuer /etc/signing-milter werden in postinst gesetzt 
+  * Rechte fuer /etc/signing-milter werden in postinst gesetzt
 
  -- Andreas Schulze <debian@andreasschulze.de>  Mon, 22 Mar 2010 09:39:53 +0100
 
 signing-milter (0.9.2+2010032105) stable; urgency=low
 
-  * Milter Macro {daemon_name} wird beim MAIL FROM ermittelt 
+  * Milter Macro {daemon_name} wird beim MAIL FROM ermittelt
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 21 Mar 2010 20:40:13 +0100
 
 signing-milter (0.9.2+2010032104) stable; urgency=low
 
-  * Start- und Stopmeldungen geändert 
+  * Start- und Stopmeldungen geändert
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 21 Mar 2010 19:41:11 +0100
 
 signing-milter (0.9.2+2010032103) stable; urgency=low
 
-  * Port in der Manpage korrigiert 
+  * Port in der Manpage korrigiert
   * postinst hinzugefuegt, Dienst wird automatisch gestartet
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 21 Mar 2010 19:26:10 +0100
 
 signing-milter (0.9.2+2010032102) stable; urgency=low
 
-  * run_script angepasst 
+  * run_script angepasst
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 21 Mar 2010 17:45:25 +0100
 
 signing-milter (0.9.2+2010032101) stable; urgency=low
 
-  * erste beta 
+  * erste beta
 
  -- Andreas Schulze <debian@andreasschulze.de>  Sun, 21 Mar 2010 12:51:40 +0100
 
 signing-milter (0.9.1-2010031801) stable; urgency=low
 
-  * Umstellung auf Headerchains 
+  * Umstellung auf Headerchains
 
  -- Andreas Schulze <debian@andreasschulze.de>  Thu, 18 Mar 2010 22:28:46 +0100
 
