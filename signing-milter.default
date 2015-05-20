@@ -1,0 +1,4 @@
+# use in /etc/default/signing-milter
+#DISABLE_HOURLY_STATISTIK_LOGGING='yes'
+#DISABLE_DAILY_STATISTIK_LOGGING='yes'
+#OPTIONS="-x"

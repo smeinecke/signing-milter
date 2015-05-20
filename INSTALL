@@ -1,0 +1,5 @@
+Build Requirements
+
+libmilter 8.14
+tinycdb
+openssl

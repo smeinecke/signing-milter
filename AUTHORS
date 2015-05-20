@@ -1,0 +1,8 @@
+AUTHORS
+=======
+
+Andreas Schulze <signing-milter@andreasschulze.de>
+ - Initial author.
+
+Portions of code are taken from the postfix mailserver written by Wietse Venema.
+Thanks for his review and clarification.

@@ -1,0 +1,58 @@
+31. Juli 2012
+ Der Milter hat bisher keine Zwischen- oder Rootzertifikate in die Signatur
+ aufgenommen. Dies wird nun unterstützt. Dazu müssen die Signaturdaten
+ (Zertifikat und Schlüssel) in einer Datei "/path/to/foo-cert+key.pem"
+ abgelegt werden. Existiert dann eine Datei "/path/to/foo-chain.pem", werden
+ darin die Zertifikate der Zwischen- und Rootzertifikate erwartet und in die
+ Signatur eingefügt
+
+1. März 2011
+ die Dezemberversion hat einen fatalen Speicherfresser in
+ callback_close
+ -> unbedingt aktualisieren
+
+27. Dezember 2010
+ mit einer optionalen Lookuptabelle fuer Empfängeradressen
+ kann der Signaturmodus von Clear auf Opaque umgestellt werden.
+ Die entsprechenden Mails sind dann nicht mehr so anfällig gegen
+ kaputte Mailer, die Zeilenumbrüche ändern und damit Signaturen
+ invalidieren.
+
+25. Oktober 2010
+ ein täglicher Cron-Job fürs Statistik-Logging kann nun einmal täglich
+ einen Eintrag loggen, wenn der stündliche Job deaktiviert ist.
+ Um Statistik-Logging komplett zu unterdruecken, muß nun sowohl
+ "DISABLE_HOURLY_STATISTIK_LOGGING=yes" als auch
+ "DISABLE_DAILY_STATISTIK_LOGGING=yes" in der
+ /etc/default/signing-milter gesetzt werden.
+
+19. Oktover 2010
+ der stündliche Cron-Job für's Statistik-Logging kann mit einem
+ Eintrag "DISABLE_HOURLY_STATISTIK_LOGGING=yes" in der
+ /etc/cron.hourly/signing-milter deaktiviert werden.
+
+Oktober 2010
+BIO-Programmierung ist echt übel. Der Milter speichert nun
+alle zu signierenden Daten in einen eigenen Puffer, der im EOM
+zu einem BIO konvertiert wird. Das macht den Milter schnell.
+
+August 2010
+ Als Input kommen manchmal Content-* Header, die länger als 76 Zeichen sind.
+ Werden diese in den MIME-Body übernommen, erzeugt der Milter quasi
+ MIME-Content, der gegen RFC 2045 verstößt.
+ Dazu wurde nun zwei Funktion eingebaut:
+  1. Content-Type Header werden an "; " umbegrochen,
+     indem durch ;\n\t" ersetzt wird.
+  2. der gesamte, signierte Body wird getestet,
+     ob Zeilen länger als 76 Zeichen sind.
+
+Milter-Dokumentation:
+https://www.milter.org/developers/sample
+
+erste lauffähige Version
+sofortiger Codefreeze und 0.9.2
+
+SIGNAL-Handling:
+SIGHUP zum dumpen oder einlesen der Config wäre sinnvoll.
+Allerdings ist das Signal schon durch das Milter-API irgendwie
+belegt.

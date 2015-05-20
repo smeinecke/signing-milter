@@ -1,0 +1,24 @@
+Author:
+    Andreas Schulze <signing-milter at andreasschulze.de>
+
+Copyright:
+    Copyright (C) 2010,2011 Andreas Schulze
+
+License:
+    GNU GPL Version 2
+
+    Additionally, compiling, linking, and/or using the OpenSSL toolkit in
+    conjunction with this software is allowed.
+    (these exception makes debian lintian happy)
+
+The Debian packaging is (C) 2010, Andreas Schulze <debian@andreasschulze.de>
+and is licensed under the GPL, see `/usr/share/common-licenses/GPL-2'.
+
+The following files are mostly copied from postfix:
+lowercase.* and dict_cdb.*
+
+/* AUTHOR(S)
+/*      Wietse Venema
+/*      IBM T.J. Watson Research
+/*      P.O. Box 704
+/*      Yorktown Heights, NY 10598, USA
