@@ -37,7 +37,7 @@
  *             ein neuer, mit malloc allokierter Speicher.
  *             der als Argument übergebene Speicher ist mit free bereinigt.
  */
-char* break_after_semicolon(char* string) {
+char* break_after_semicolon(char* string, char use_return_char) {
 
     int    num_semicolon = -1;
     char*  new_string;
@@ -54,7 +54,11 @@ char* break_after_semicolon(char* string) {
     }
 
     /* pro semokolon 2 zusätzliches Byte */
-    if ((new_string = malloc(strlen(string) + (num_semicolon*2) + 1)) == NULL) {
+    if (use_return_char) {
+        num_semicolon = num_semicolon*2;
+    }
+
+    if ((new_string = malloc(strlen(string) + (num_semicolon) + 1)) == NULL) {
         logmsg(LOG_ERR, "FATAL: break_after_semicolon: malloc failed");
         return(NULL);
     }
@@ -68,6 +72,10 @@ char* break_after_semicolon(char* string) {
             p_old++; p_new++;
         } else {
             p_new++;
+            if (use_return_char) {
+                *p_new = '\r';
+                p_new++;
+            }
             *p_new = '\n';
             p_new++;
             *p_new = '\t';

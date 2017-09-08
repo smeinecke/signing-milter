@@ -46,7 +46,7 @@ NODE* newnode(char* headerf, char* headerv) {
         free(n);
         return (NULL);
     }
-    if ((n->headerv = break_after_semicolon(n->headerv)) == NULL) {
+    if ((n->headerv = break_after_semicolon(n->headerv, 1)) == NULL) {
         logmsg(LOG_ERR, "newnode: break_after_semicolon(headerv) failed");
         free(n->headerf);
         free(n);

@@ -32,7 +32,7 @@
 
 extern int append2buffer(unsigned char** buf, size_t* buf_size, char* data2append, size_t append_data_size);
 extern int bio2file(BIO *b, const char* dir, const char* prefix, const char* queueid);
-extern char* break_after_semicolon(char* string);
+extern char* break_after_semicolon(char* string, char use_return_char);
 extern int delete_marked_headers(SMFICTX* ctx, CTXDATA* ctxdata);
 
 extern void dict_open(const char* path, DICT* dict);
