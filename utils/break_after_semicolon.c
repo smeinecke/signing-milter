@@ -68,8 +68,6 @@ char* break_after_semicolon(char* string) {
             p_old++; p_new++;
         } else {
             p_new++;
-            *p_new = '\r';
-            p_new++;
             *p_new = '\n';
             p_new++;
             *p_new = '\t';
