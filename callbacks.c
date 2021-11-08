@@ -1,6 +1,6 @@
 /*
  * signing-milter - callbacks.c
- * Copyright (C) 2010-2015  Andreas Schulze
+ * Copyright (C) 2010-2020  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -198,9 +198,9 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
     if (!ctxdata->queueid) {
         if ((ctxdata->queueid = smfi_getsymval(ctx, "{i}")) == NULL) {
             ctxdata->queueid = "unknown";
-            logmsg(LOG_WARNING, "%s: warning: callback_eoh: smfi_getsymval(queueid) failed", ctxdata->queueid);
+            logmsg(LOG_WARNING, "%s: warning: callback_header: smfi_getsymval(queueid) failed", ctxdata->queueid);
         }
-        logmsg(LOG_NOTICE, "callback_header: got queuid: %s", ctxdata->queueid);
+        logmsg(LOG_INFO, "callback_header: got queuid: %s", ctxdata->queueid);
     }
 
     if (strcasecmp(headerf, "mime-version") == 0) {
@@ -222,7 +222,7 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
          *       ist sicher noch nocht perfekt
          */
         if (is_already_signed(headerf, headerv)) {
-            logmsg(LOG_NOTICE, "mail seemes allready signed.");
+            logmsg(LOG_NOTICE, "mail seemes already signed.");
             return SMFIS_ACCEPT;
         }
 
@@ -231,7 +231,7 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
             ctxdata->mailflags |= MF_TYPE_MULTIPART;
         }
 
-        if ((n = newnode(headerf, headerv)) == NULL) {
+        if ((n = newnode(headerf, headerv, PHASE_PRE_SIGN)) == NULL) {
             logmsg(LOG_ERR, "error: callback_header: alloc new node failed");
             return SMFIS_TEMPFAIL;
         }
@@ -309,6 +309,25 @@ sfsistat callback_eoh(SMFICTX* ctx) {
         return SMFIS_REJECT;
     }
 
+    /*
+     * only a MIME-Version header present, no Content-* header
+     * https://tools.ietf.org/html/rfc2045#section-5.2 mention an implicit default
+     */
+    if ( (ctxdata->headerchain == NULL) && ((ctxdata->mailflags & MF_TYPE_MIME) != 0) ) {
+
+        NODE* n;
+        char* headerf = "Content-Type";
+        char* headerv = "text/plain; charset=\"us-ascii\"";
+
+        logmsg(LOG_WARNING, "%s: malformed Content: 'MIME-Version' header but no 'Content-*' header found. Please read RFC 2045, Section 5.2. Adding '%s: %s'" , ctxdata->queueid, headerf, headerv);
+
+        if ((n = newnode(headerf, headerv, PHASE_PRE_SIGN)) == NULL) {
+            logmsg(LOG_ERR, "error: callback_eoh: alloc new node failed");
+            return SMFIS_TEMPFAIL;
+        }
+        appendnode(&(ctxdata->headerchain), n);
+    }
+
     dump_mailflags(ctxdata->mailflags);
     dump_pkcs7flags(ctxdata->pkcs7flags);
 
@@ -364,7 +383,7 @@ sfsistat callback_body(SMFICTX* ctx, unsigned char* bodyp, size_t len) {
             start++;
             length--;
         }
-        logmsg(LOG_DEBUG, "%s: skipping %lu/%lu first bytes while copying body to signingbuffer", ctxdata->queueid, start - bodyp, len - length);
+        logmsg(LOG_DEBUG, "%s: skip %lu bytes RFC 2046 prolog discarded", ctxdata->queueid, start - bodyp);
     }
 
     if ((append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), (char*) start, length)) != 0) {
@@ -401,6 +420,44 @@ sfsistat callback_eom(SMFICTX* ctx) {
     }
 
     logmsg(LOG_DEBUG, "callback_eom: ctxdata->data2sign_len=%zu", ctxdata->data2sign_len);
+
+    /*
+     * discard/don't sign the optional epilogue
+     */
+    if (ctxdata->mailflags & MF_TYPE_MULTIPART) {
+
+        unsigned char* old_end = ctxdata->data2sign + ctxdata->data2sign_len;
+        unsigned char* new_end;
+        size_t         skipped_epilog_bytes;
+        int            found = 0;
+
+        logmsg(LOG_DEBUG, "%s: try discarding optional RFC 2046 epilogue",
+                          ctxdata->queueid);
+
+        for (new_end = old_end;
+             new_end > ctxdata->data2sign;
+             new_end--) {
+            /* logmsg(LOG_DEBUG, "%c, %c, %c, %c",
+                              *(new_end-4), *(new_end-3),
+                              *(new_end-2), *(new_end-1)); */
+            if (   *(new_end-1) == '\n' && *(new_end-2) == '\r'
+                && *(new_end-3) == '-'  && *(new_end-4) == '-'  ) {
+              skipped_epilog_bytes = old_end - new_end;
+              found = 1;
+              if (skipped_epilog_bytes > 0) {
+                  logmsg(LOG_INFO, "%s: %lu bytes RFC 2046 epilogue discarded",
+                                   ctxdata->queueid, skipped_epilog_bytes);
+              }
+              ctxdata->data2sign_len -= skipped_epilog_bytes;
+              break;
+            }
+        }
+
+        if (new_end == ctxdata->data2sign && found == 0) {
+            logmsg(LOG_WARNING, "%s: callback_eom: strange: RFC 2046 close-delimiter not found", ctxdata->queueid);
+        }
+        logmsg(LOG_DEBUG, "callback_eom: ctxdata->data2sign_len=%zu", ctxdata->data2sign_len);
+    }
 
     gettimeofday(&start_time, NULL);
 
@@ -496,10 +553,12 @@ sfsistat callback_eom(SMFICTX* ctx) {
 
         logmsg(LOG_DEBUG, "%s: Header aus PKCS7: %s", ctxdata->queueid, headerline);
 
-	/* XXX: was ist, wenn eine 7bit ASCII Mail signiert wurde?
-         *      dann fehlt doch der Mime-Version: 1.0 Header?
+        /*
+         * wenn eine 7bit ASCII Mail signiert wurde, enthielt die keinen MIME-Header
+         * dann: diesen hier uebernehmen
          */
-        if (strncasecmp(headerline, "mime-version", 12) == 0) {
+        if ( (strncasecmp(headerline, "mime-version", 12) == 0) &&
+             ((ctxdata->mailflags & MF_TYPE_MIME) != 0) ) {
             logmsg(LOG_DEBUG, "%s: skip mime-version header", ctxdata->queueid);
             if (headerline)
                 free(headerline);
@@ -517,7 +576,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
             return SMFIS_TEMPFAIL;
         }
 
-        if ((headerv = break_after_semicolon(headerv, 0)) == NULL) {
+        if ((headerv = break_after_semicolon(headerv, PHASE_POST_SIGN)) == NULL) {
             logmsg(LOG_ERR, "%s: error: callback_eom: break_after_semicolon failed", ctxdata->queueid);
             if (headerline)
                 free(headerline);
@@ -561,7 +620,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
     /*
      * etwas angeben ...
      */
-    logmsg(LOG_NOTICE, "%s: %ssigned with %s%s", ctxdata->queueid, ctxdata->mailflags & MF_SIGNMODE_OPAQUE ? "opaque" : "clear", ctxdata->pemfilename, ctxdata->chain != NULL ? " (+chain)" : "(ohne chain");
+    logmsg(LOG_NOTICE, "%s: %ssigned with %s%s", ctxdata->queueid, ctxdata->mailflags & MF_SIGNMODE_OPAQUE ? "opaque" : "clear", ctxdata->pemfilename, ctxdata->chain != NULL ? " (+chain)" : " (no chain)");
     logmsg(LOG_INFO, "%s: signing %ld byte took %d.%d sec", ctxdata->queueid, ctxdata->data2sign_len, duration.tv_sec, duration.tv_usec);
 
     /*

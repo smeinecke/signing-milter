@@ -1,6 +1,6 @@
 /*
  * signing-milter - callbacks.h
- * Copyright (C) 2010,2011  Andreas Schulze
+ * Copyright (C) 2010-2018  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 #include <assert.h>
 #include <libmilter/mfapi.h>
 #include <openssl/pkcs7.h>
+#include <string.h>
 #include <syslog.h>
 #include <sys/time.h>
 

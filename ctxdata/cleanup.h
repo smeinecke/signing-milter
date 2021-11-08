@@ -1,6 +1,6 @@
 /*
  * signing-milter - ctxdata/cleanup.h
- * Copyright (C) 2010,2011  Andreas Schulze
+ * Copyright (C) 2010-2018  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 #define _CLEANUP_H_INCLUDED_
 
 #include <assert.h>
+#include <string.h>
 
 #include "../utils/utils.h"
 #include "ctxdata.h"

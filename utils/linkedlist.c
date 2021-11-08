@@ -1,6 +1,6 @@
 /*
  * signing-milter - utils/linkedlist.c
- * Copyright (C) 2010,2011  Andreas Schulze
+ * Copyright (C) 2010-2018  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ NODE* get_last(NODE* node) {
     assert(p != NULL);
     return (p);
 }
-    
+
 /*
  * this adds a node to the end of the list. You must allocate a node and
  * then pass its address to this function
@@ -54,7 +54,7 @@ NODE* appendnode(NODE** head, NODE* node) {
     return (*head);
 }
 
-/* 
+/*
  * loescht einen beliebigen Knoten
  * wenn der zu loeschende Knoten einen Verweis auf einen weiteren Knoten hat,
  * wird dieser Verweis zurueckgegeben

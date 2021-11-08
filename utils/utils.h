@@ -1,6 +1,6 @@
 /*
  * signing-milter - utils/utils.h
- * Copyright (C) 2010-2012  Andreas Schulze
+ * Copyright (C) 2010-2019  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,12 @@
 
 #include "../signing-milter.h"
 
+#define PHASE_PRE_SIGN	3
+#define PHASE_POST_SIGN	2
+
 extern int append2buffer(unsigned char** buf, size_t* buf_size, char* data2append, size_t append_data_size);
 extern int bio2file(BIO *b, const char* dir, const char* prefix, const char* queueid);
-extern char* break_after_semicolon(char* string, char use_return_char);
+extern char* break_after_semicolon(char* string, int phase);
 extern int delete_marked_headers(SMFICTX* ctx, CTXDATA* ctxdata);
 
 extern void dict_open(const char* path, DICT* dict);
@@ -60,8 +63,7 @@ extern STACK_OF(X509)* load_pem_chain(const char* file);
 extern void logmsg(int priority, const char *fmt, ...);
 extern char *lowercase(char *);
 
-extern NODE* newnode(char* headerf, char* headerv);
-extern void dumpnode(FILE* stream, NODE* node, char* lineend);
+extern NODE* newnode(char* headerf, char* headerv, int phase);
 extern void freenode(NODE* node);
 
 extern char* separate_header(const char* line, char** headerf);

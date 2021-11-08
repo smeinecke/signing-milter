@@ -2,6 +2,3 @@
 #DISABLE_HOURLY_STATISTIK_LOGGING='yes'
 #DISABLE_DAILY_STATISTIK_LOGGING='yes'
 #OPTIONS="-x"
-
-# Default options for postfix
-#OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfix"

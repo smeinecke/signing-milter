@@ -25,7 +25,7 @@
 
 # taegliche Statistik, wenn nicht deaktiviert ...
 if [ "${DISABLE_DAILY_STATISTIK_LOGGING}" != "yes" ]; then
-    # ... und nicht stündliche Statistik aktiviert ist
+    # ... und nicht stuendliche Statistik aktiviert ist
     if [ "${DISABLE_HOURLY_STATISTIK_LOGGING}" = "yes" ]; then
         svc -a /var/lib/supervise/signing-milter
     fi

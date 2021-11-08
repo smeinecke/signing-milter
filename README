@@ -1,3 +1,55 @@
+20200719
+ debian/ funktioniert mit den Debian-Versionen Stretch und Buster
+
+20200719
+ Der milter beendet sich nicht mehr bei Mails mit meinem MIME-Version Header
+ aber ohne Content-* Header, ein Default wird eingefügt:
+ https://tools.ietf.org/html/rfc2045#section-5.2
+
+20200719
+ viele MUA bieten eine Option "quelltext anzeigen" Dort werden TABs meist als
+ SPACE angezeigt. COPY&PASTE verändert so wieder die Signatur.
+ Headerumbrüche mit einem SPACE einrücken.
+
+20200719
+ bei einer ASCII-Mail den MIME-Version Header aus dem signierten Daten
+ übernehmen
+
+20200719
+ Logging ohne Syslog implementiert: `signing-milter -l` schreibt nur noch nach
+ STDOUT
+
+Juli 2020
+ Symptom: Outlook zeigt signierte Mails als verändert an.
+ Thunderbird zeigt hingegen bei den selben Mails eine valide Signatur an.
+
+ Problem: eine MIME-Mail besteht aus einer Präamble, MIME-Entities
+ und einem Epilog (https://tools.ietf.org/html/rfc2046#page-21)
+
+ S/MIME soll aber nur MIME-Entities signieren. Der bisherige Code hat zwar
+ die Präamble ignoriert, nicht aber den Epilog.
+ Thunderbird stört sich nicht daran, wenn der Epilog mitsigniert wurde,
+ Outlook schon. Das Problem tritt nur bei MIME-Mails auf, die nicht mit
+ den 4 Zeichen Minus, Minus, \r und \n enden.
+
+ und alle zusammen: E-Mail ist total einfach - geradezu "Simple" :-/
+
+15. Oktober 2018
+ Beim Update im März 2015 hat sich eine Unschärfe eingeschlichen.
+ Header der ursprünglichen E-Mail werden nach einem ; umgebrochen
+ und wandern praktisch als MIME-Header in den Mailbody. Dort sind
+ Zeilenumbrüche mit \r\n definiert.
+
+ Nach der Signatur werden Daten in den eigentlichen Mailheader
+ zurückgeschrieben. *Dort* sind Headerzeilen jedoch nur mit \n
+ umzubrechen.
+
+ E-Mail ist total einfach - geradezu "Simple" :-/
+
+ Diesen Fehler hat Stefan Meinecke vor über einem Jahr schon gefunden
+ und in praktisch identischer Art gefixt:
+ https://github.com/smeinecke/signing-milter/commit/eed029cd507f0896129e7b6dc1eaf807eed12e04
+
 31. Juli 2012
  Der Milter hat bisher keine Zwischen- oder Rootzertifikate in die Signatur
  aufgenommen. Dies wird nun unterstützt. Dazu müssen die Signaturdaten

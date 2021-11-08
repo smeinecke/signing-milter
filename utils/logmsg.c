@@ -1,6 +1,6 @@
 /*
  * signing-milter - utils/logmsg.c
- * Copyright (C) 2010,2011  Andreas Schulze
+ * Copyright (C) 2010,2020  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,10 +35,11 @@ void logmsg(int priority, const char *fmt, ...) {
         va_end(ap);
 
         /* Write message to syslog */
-        syslog(priority, "%s", buf);
+        if (LOG_DEST_SYSLOG == opt_logdest)
+            syslog(priority, "%s", buf);
 
         /* Print message to terminal */
-        if (opt_loglevel >= LOG_DEBUG || priority <= LOG_WARNING) {
+        if (LOG_DEST_STDOUT == opt_logdest || opt_loglevel >= LOG_DEBUG || priority <= LOG_WARNING) {
             fprintf(stdout, "%s\n", buf);
         }
     }

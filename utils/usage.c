@@ -36,6 +36,7 @@ void usage(void) {
     printf("                  default: %s\n", opt_group);
     printf("  -k dir          keep tempfile in dir %s\n", opt_keepdir ? opt_keepdir : "");
     printf("                  default: none\n");
+    printf("  -l              log to STDOUT, don't use SYSLOG\n");
     printf("  -m signingtable full path to a lookuptable containing senderaddresses\n");
     printf("                  and corresponding signing keyfiles\n");
     printf("                  default: %s\n", opt_signingtable);

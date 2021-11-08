@@ -1,0 +1,2 @@
+testsuite-autopkgtest-missing
+package-uses-old-debhelper-compat-version 10

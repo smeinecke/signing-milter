@@ -25,5 +25,8 @@ exec 2>&1
 
 test -f /etc/default/signing-milter && . /etc/default/signing-milter
 
-cd ${WORKDIR:-/etc/signing-milter}
+cd "${WORKDIR:-/etc/signing-milter}/" || { echo "FATAL: $!"; exit 1; }
+
+# SC2086: Double quote to prevent globbing and word splitting.
+# shellcheck disable=SC2086
 exec env - /usr/sbin/signing-milter ${OPTIONS}

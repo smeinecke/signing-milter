@@ -1,6 +1,6 @@
 /*
  * signing-milter - utils/lowercase.c
- * Copyright (C) 2011  Andreas Schulze
+ * Copyright (C) 2011-2018  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  * Authors:
- *      Andreas Schulze <signing-milter at andreasschulze.de> based on 
+ *      Andreas Schulze <signing-milter at andreasschulze.de> based on
  *      postfix/src/utils/{lowercase.c,sys_defs.h} by
  *      Wietse Venema
  *      IBM T.J. Watson Research

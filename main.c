@@ -1,6 +1,6 @@
 /*
  * signing-milter - main.c
- * Copyright (C) 2010,2011  Andreas Schulze
+ * Copyright (C) 2010-2020  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 /* Standardwerte setzen */
 char* opt_clientgroup  = NULL;
 int   opt_loglevel     = LOG_NOTICE;
+int   opt_logdest      = LOG_DEST_SYSLOG;
 char* opt_group        = "signing-milter";
 char* opt_keepdir      = NULL;
 char* opt_signingtable = "/etc/signing-milter/signingtable.cdb";
@@ -74,7 +75,7 @@ int main(int argc, char** argv) {
      */
     uid = gid = client_gid = root_gid = 0;
 
-    while ((c = getopt(argc, argv, "bc:d:hfg:k:m:n:s:t:u:vx")) > 0) {
+    while ((c = getopt(argc, argv, "bc:d:hfg:k:lm:n:s:t:u:vx")) > 0) {
         switch (c) {
         case 'b': /* break contentheader */
             logmsg(LOG_INFO, "option -b is ignored for compatibily reasons, you may remove it safely");
@@ -125,6 +126,9 @@ int main(int argc, char** argv) {
         case 'h':
             usage();
             exit(EX_OK);
+        case 'l': /* switch log destination from SYSLOG (default) to STDOUT */
+            opt_logdest = LOG_DEST_STDOUT;
+            break;
         case 'm': /* Signingtable cdbfilename */
             opt_signingtable = optarg;
             break;
@@ -166,8 +170,11 @@ int main(int argc, char** argv) {
         }
     }
 
-    /* open syslog an say helo */
-    openlog(STR_PROGNAME, LOG_PID, LOG_MAIL);
+    /* open syslog */
+    if (LOG_DEST_SYSLOG == opt_logdest)
+        openlog(STR_PROGNAME, LOG_PID, LOG_MAIL);
+
+    /* say helo */
     logmsg(LOG_NOTICE, "starting %s %s listening on %s, loglevel %i",
                STR_PROGNAME, STR_PROGVERSION, opt_miltersocket, opt_loglevel);
 
@@ -265,13 +272,13 @@ int main(int argc, char** argv) {
     if (setuid(uid) != 0) {
         logmsg(LOG_ERR, "setuid(%i) failed: %s", pw->pw_uid, strerror(errno));
         exit(EX_SOFTWARE);
-    } 
+    }
 
     /* aktuelle uid/gid pruefen und loggen */
     uid = getuid();
     gid = getgid();
     if (uid == 0 || gid == 0) {
-        logmsg(LOG_ERR, "too much priveleges, %s will not start under root", STR_PROGNAME);
+        logmsg(LOG_ERR, "too much privileges, %s will not start under root", STR_PROGNAME);
         exit(EX_DATAERR);
     }
     logmsg(LOG_INFO, "running as uid: %i, gid: %i", (int) uid, (int) gid);

@@ -1,6 +1,6 @@
 #
 #  signing-milter - ctxdata/Makefile
-#  Copyright (C) 2010,2011  Andreas Schulze
+#  Copyright (C) 2010-2018  Andreas Schulze
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -30,4 +30,4 @@ clean:
 
 .c.o:
 	@rm -f $@
-	$(CC) $(CFLAGS) -c $*.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) -c $*.c

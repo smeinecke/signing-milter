@@ -1,6 +1,6 @@
 /*
  * signing-milter - utils/break_after_semicolon.c
- * Copyright (C) 2010-2015  Andreas Schulze
+ * Copyright (C) 2010-2018  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,10 +23,13 @@
 #include "break_after_semicolon.h"
 
 /*
- * Ersetzt in einem String das ";" gefolgt von einem beliebigen Zeichen durch "; \r \n \t"
+ * Ersetzt in einem String das ";" gefolgt von einem beliebigen Zeichen
+ * in der Phase vor dem Signieren durch "; \r \n \t"
+ * und in der Phase nach dem Signieren durch "; \n \t"
  * Annahme : nach einem ; kommt immer ein Leerzeichen. Dies ist jedoch durch einen Aufruf von hdrdup sichergestellt.
  *
- * Argument: ein mit malloc allokierter Speicherbereich mit einem nullterminierten String
+ * Argument: - ein mit malloc allokierter Speicherbereich mit einem nullterminierten String
+ *           - PHASE_PRE_SIGN (3) oder PHASE_POST_SIGN (2)
  * Rückgabe: - im Fehlerfall:
  *             NULL
  *           - wenn string keine ; enthielt:
@@ -37,7 +40,7 @@
  *             ein neuer, mit malloc allokierter Speicher.
  *             der als Argument übergebene Speicher ist mit free bereinigt.
  */
-char* break_after_semicolon(char* string, char use_return_char) {
+char* break_after_semicolon(char* string, int phase) {
 
     int    num_semicolon = -1;
     char*  new_string;
@@ -53,12 +56,8 @@ char* break_after_semicolon(char* string, char use_return_char) {
         return (string);
     }
 
-    /* pro semokolon 2 zusätzliches Byte */
-    if (use_return_char) {
-        num_semicolon = num_semicolon*2;
-    }
-
-    if ((new_string = malloc(strlen(string) + (num_semicolon) + 1)) == NULL) {
+    /* pro Semokolon 2 oder 3 zusätzliches Byte + ein Leerzeichen (oder Luft?) */
+    if ((new_string = malloc(strlen(string) + (num_semicolon*phase) + 1)) == NULL) {
         logmsg(LOG_ERR, "FATAL: break_after_semicolon: malloc failed");
         return(NULL);
     }
@@ -71,14 +70,14 @@ char* break_after_semicolon(char* string, char use_return_char) {
         if (*p_old != ';') {
             p_old++; p_new++;
         } else {
-            p_new++;
-            if (use_return_char) {
-                *p_new = '\r';
+            if (PHASE_PRE_SIGN == phase) {
                 p_new++;
+                *p_new = '\r';
             }
+            p_new++;
             *p_new = '\n';
             p_new++;
-            *p_new = '\t';
+            *p_new = ' ';
             p_new++;
             p_old++; /* Zeichen nach ; */
             if (*p_old != ' ')

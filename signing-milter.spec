@@ -1,6 +1,6 @@
 #
 #  signing-milter - signing-milter.spec
-#  Copyright (C) 2010-2015  Andreas Schulze
+#  Copyright (C) 2010-2020  Andreas Schulze
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -21,22 +21,17 @@
 #
 
 Name:		signing-milter
-Version:	20150308
+Version:	20200719
 %define		debian_version %{version}01
 Release:	1.1
 Summary:	Sign email via milter protocol
 License:	GPL-2.0
 Group:		Productivity/Networking/Email/Utilities
 Url:		https://signing-milter.org
-Source:		https://signing-milter.org/signing-milter_%{debian_version}.tar.gz
+Source:		https://signing-milter.org/signing-milter_%{debian_version}.tar.xz
 BuildRoot:	%{_tmppath}/%{name}
-BuildRequires:	pwdutils, sendmail-devel >= 8.14, tinycdb-devel >= 0.77
-%if 0%{?sles_version} == 9
-%define		openssl_version 0.9.8x
-Source2:	http://www.openssl.org/source/openssl-%{openssl_version}.tar.gz
-%else
-BuildRequires:	openssl-devel
-%endif
+BuildRequires:	pkg-config, xz, pwdutils
+BuildRequires:	sendmail-devel >= 8.14, tinycdb-devel >= 0.77, openssl-devel
 Requires:	cron
 
 %description
@@ -45,23 +40,9 @@ part of version 8.11 of sendmail(8), to  provide  signing  service  for
 mail transiting a milter-aware MTA.
 
 %prep
-%setup -n %{name}-%{debian_version}
+%setup -n %{name}
 
 %build
-%if 0%{?sles_version} == 9
-# SSL selber bauen
-gzip -cd %{S:2} | tar xf -
-cd openssl-%{openssl_version}
-./config threads no-rc5 no-idea no-zlib --prefix=/usr
-make depend
-make
-make INSTALL_PREFIX=`pwd`/../openssl-%{openssl_version}-inst/ install
-SSL_INCDIR="`pwd`/../openssl-%{openssl_version}-inst/usr/include/"
-SSL_LIBDIR="`pwd`/../openssl-%{openssl_version}-inst/usr/lib/"
-export SSL_INCDIR SSL_LIBDIR
-cd ..
-%endif
-
 make
 
 %install
@@ -81,7 +62,7 @@ if [ ! -L /etc/service/signing-milter ]; then
     echo " - richte signing-milter ein ( starte aber noch nicht )"
     touch /var/lib/supervise/signing-milter/down
     ln -s ../../var/lib/supervise/signing-milter /etc/service/ || :
-else 
+else
     echo "- starte signing-milter neu"
     /usr/bin/svc -t /var/lib/supervise/signing-milter || :
 fi

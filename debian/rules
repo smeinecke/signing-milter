@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 #
 #  signing-milter - debian/rules
-#  Copyright (C) 2010,2011  Andreas Schulze
+#  Copyright (C) 2010-2020  Andreas Schulze
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -21,7 +21,18 @@
 #
 #
 
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/makefile.mk
 
-DEB_MAKE_INSTALL_TARGET = install DESTDIR=$(DEB_DESTDIR)
+DEB_MAKE_CHECK_TARGET = check
+
+clean::
+	chmod -x run_signing-milter
+
+install/signing-milter::
+	chmod +x run_signing-milter
+	find debian/ -type f | while read f ; do head -n1 $$f | grep --silent 'sh$$' && shellcheck --exclude SC1091 $$f || : ; done

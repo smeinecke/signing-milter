@@ -1,6 +1,6 @@
 /*
  * signing-milter - utils/load_pem.c
- * Copyright (C) 2010-2012  Andreas Schulze
+ * Copyright (C) 2010-2018  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 
 #include "load_pem.h"
 
-/* 
+/*
  * laed eine X509 Zertifikat aus der PEM-Datei "file"
  */
 X509* load_pem_cert(const char* file) {

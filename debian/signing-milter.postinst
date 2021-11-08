@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 #  signing-milter - debian/postinst
-#  Copyright (C) 2010,2011  Andreas Schulze
+#  Copyright (C) 2010,2018  Andreas Schulze
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -25,9 +25,12 @@ set -e
 
 case "$1" in
     configure)
-        getent passwd signing-milter || adduser --system --home /tmp signing-milter
-        getent group signing-milter || addgroup --system signing-milter
-        usermod -g signing-milter signing-milter
+
+        if ! getent passwd signing-milter >/dev/null; then
+            adduser --quiet --system --group --no-create-home --home /etc/signing-milter signing-milter
+        fi
+
+        echo " - setzte Rechte fuer /etc/signing-milter"
         chgrp --changes signing-milter /etc/signing-milter/
         chmod --changes 0750 /etc/signing-milter/
 

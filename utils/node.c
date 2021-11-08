@@ -1,6 +1,6 @@
 /*
  * signing-milter - utils/node.c
- * Copyright (C) 2010,2011  Andreas Schulze
+ * Copyright (C) 2010-2018  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 
 #include "node.h"
 
-NODE* newnode(char* headerf, char* headerv) {
+NODE* newnode(char* headerf, char* headerv, int phase) {
 
     NODE* n;
 
@@ -46,7 +46,7 @@ NODE* newnode(char* headerf, char* headerv) {
         free(n);
         return (NULL);
     }
-    if ((n->headerv = break_after_semicolon(n->headerv, 1)) == NULL) {
+    if ((n->headerv = break_after_semicolon(n->headerv, phase)) == NULL) {
         logmsg(LOG_ERR, "newnode: break_after_semicolon(headerv) failed");
         free(n->headerf);
         free(n);

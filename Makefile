@@ -1,6 +1,6 @@
 #
 #  signing-milter - Makefile
-#  Copyright (C) 2010,2011  Andreas Schulze
+#  Copyright (C) 2010-2019  Andreas Schulze
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -21,28 +21,18 @@
 #
 
 OBJ     = callbacks.o main.o stats.o
-
-# SLES9: cc kann kein -Wextra
-CFLAGS  = -g -pedantic -Wall -Wmissing-prototypes -Wmissing-declarations -Wpointer-arith -Wchar-subscripts -Wstrict-aliasing -Wformat=2
-LIBS    = -lcdb -lmilter -lpthread
-
-# eigenes OpenSSL zum kompilieren zu nutzen
-# siehe http://www.mail-archive.com/openssl-users@openssl.org/msg50844.html
-ifdef SSL_INCDIR
-CFLAGS  += -I$(SSL_INCDIR)
-endif
-ifdef SSL_LIBDIR
-LIBS    += $(SSL_LIBDIR)/libssl.a $(SSL_LIBDIR)/libcrypto.a -ldl
-else
-LIBS    += -lssl -lcrypto
-endif
+LIBS    = $(shell pkg-config --libs libcdb)
+LIBS   += -lmilter
+LIBS   += -lpthread
+LIBS   += $(shell pkg-config --libs openssl)
+CC      = gcc
 
 all: signing-milter check
 
 signing-milter: $(OBJ)
-	${MAKE} -C ctxdata CFLAGS="$(CFLAGS)" all
-	${MAKE} -C utils CFLAGS="$(CFLAGS)" all
-	$(CC) $(OBJ) ctxdata/ctxdata.a utils/utils.a $(LIBS) -o signing-milter
+	$(MAKE) -C ctxdata/ CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" CXXFFLAGS="$(CXXFLAGS)" all
+	$(MAKE) -C utils/   CFLAGS="$(CFLAGS)" CPPFLAGS="$(CPPFLAGS)" CXXFFLAGS="$(CXXFLAGS)" all
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) $(OBJ) ctxdata/ctxdata.a utils/utils.a $(LIBS) -o signing-milter
 
 strip: signing-milter
 	strip signing-milter
@@ -59,7 +49,7 @@ config.h:
 	  echo '#endif'                      >> $@ ; \
 	}
 
-install: strip
+install: signing-milter
 	install -d $(DESTDIR)/etc/cron.daily/
 	install -d $(DESTDIR)/etc/cron.hourly/
 	install -d $(DESTDIR)/etc/default/
@@ -70,10 +60,10 @@ install: strip
 	install -d $(DESTDIR)/var/lib/supervise/signing-milter/
 	install --mode 0755 signing-milter $(DESTDIR)/usr/sbin/
 	install --mode 0644 signing-milter.8 $(DESTDIR)/usr/share/man/man8/
-	install --mode 0644 signing-milter.default $(DESTDIR)/etc/default/signing-milter
+	install --mode 0644 debian/signing-milter.default $(DESTDIR)/etc/default/signing-milter
 	install --mode 0755 run_signing-milter $(DESTDIR)/usr/share/signing-milter/
-	install --mode 0755 debian/cron.daily $(DESTDIR)/etc/cron.daily/signing-milter
-	install --mode 0755 debian/cron.hourly $(DESTDIR)/etc/cron.hourly/signing-milter
+	install --mode 0755 debian/signing-milter.cron.daily $(DESTDIR)/etc/cron.daily/signing-milter
+	install --mode 0755 debian/signing-milter.cron.hourly $(DESTDIR)/etc/cron.hourly/signing-milter
 	ln -s ../../../../usr/share/signing-milter/run_signing-milter $(DESTDIR)/var/lib/supervise/signing-milter/run
 
 clean:

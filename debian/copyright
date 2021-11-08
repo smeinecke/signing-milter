@@ -1,24 +1,28 @@
-Author:
-    Andreas Schulze <signing-milter at andreasschulze.de>
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: signing-milter
+Source: https://signing-milter.org/
 
-Copyright:
-    Copyright (C) 2010,2011 Andreas Schulze
+Files: *
+Copyright: 2010-2018 Andreas Schulze <signing-milter at andreasschulze.de>
+License: GPL-2 with OpenSSL exception
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; version 2.
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
+ .
+ In addition, as a special exception, the copyright holders give
+ permission to link the code of portions of this program with the
+ OpenSSL library and distribute linked combinations.
 
-License:
-    GNU GPL Version 2
-
-    Additionally, compiling, linking, and/or using the OpenSSL toolkit in
-    conjunction with this software is allowed.
-    (these exception makes debian lintian happy)
-
-The Debian packaging is (C) 2010, Andreas Schulze <debian@andreasschulze.de>
-and is licensed under the GPL, see `/usr/share/common-licenses/GPL-2'.
-
-The following files are mostly copied from postfix:
-lowercase.* and dict_cdb.*
-
-/* AUTHOR(S)
-/*      Wietse Venema
-/*      IBM T.J. Watson Research
-/*      P.O. Box 704
-/*      Yorktown Heights, NY 10598, USA
+Files: utils/lowercase.c utils/dict_cdb.c
+Copyright: Wietse Venema
+License: IPL-1.0
+ THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS IBM
+ PUBLIC LICENSE ("AGREEMENT"). ANY USE, REPRODUCTION OR DISTRIBUTION
+ OF THE PROGRAM CONSTITUTES RECIPIENT'S ACCEPTANCE OF THIS AGREEMENT.
+ .
+ full text available at https://spdx.org/licenses/IPL-1.0.html#licenseText
+Comment:
+ These files are mostly copied from postfix
