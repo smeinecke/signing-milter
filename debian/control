@@ -39,7 +39,7 @@ Package: signing-milter
 Architecture: any
 Pre-Depends: adduser
 Depends: ${misc:Depends}
- , ${shlibs:Depends}
+ , ${shlibs:Depends}, daemontools-run, tinycdb
 Description: Sign email via milter protocol
  signing-milter  uses  the  milter  interface, originally distributed as
  part of version 8.11 of sendmail(8), to  provide  signing  service  for
