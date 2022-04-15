@@ -1,0 +1,33 @@
+name: Build package
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build-debs:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os-version: ["stretch", "buster", "bullseye"]    
+    steps:
+      - uses: actions/checkout@v2
+      - uses: jtdor/build-deb-action@v1
+        env:
+          DEB_BUILD_OPTIONS: noautodbgsym
+        with:
+          docker-image: "debian:${{ matrix.os-version }}-slim"
+          buildpackage-opts: --build=binary --no-sign
+      - name: Upload deb files
+        uses: actions/upload-artifact@v3
+        with:
+          name: "packages-${{ matrix.os-version }}"
+          path: ./debian/artifacts/*
