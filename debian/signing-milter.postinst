@@ -41,9 +41,8 @@ case "$1" in
             signing-milter >/dev/null
         fi
 
-        echo "Setting up signing-milter folder permissions"
-        chgrp --changes signing-milter /etc/signing-milter/
-        chmod --changes 0750 /etc/signing-milter/
+        chgrp signing-milter /etc/signing-milter/
+        chmod 0750 /etc/signing-milter/
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
