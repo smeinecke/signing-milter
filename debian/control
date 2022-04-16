@@ -4,7 +4,6 @@ Priority: optional
 Maintainer: Andreas Schulze <debian@andreasschulze.de>
 Build-Depends: cdbs
  , debhelper (>= 10)
- , dh-systemd (>= 1.5)
  , lintian
  , shellcheck
  , pkg-config
