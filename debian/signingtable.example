@@ -1,5 +1,8 @@
-# This file defines which alias uses which which certificate file
-# Certificate file has to be suffixed by -cert+key.pem to be valid for private key and certificate
+# This file defines which certificate file is linked to which email.
+# Certificate file has to be suffixed by -cert+key.pem to be valid for
+# private key and certificate.
+# If certificate chain is needed, chain file has to be suffixed by "-chain.pem"
+# and in the same directory as the certificate file.
 #
 # Example:
 # mail@example.com  /etc/certs/private/mail_example_com-cert+key.pem
