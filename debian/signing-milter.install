@@ -1,1 +1,4 @@
 signing-milter usr/sbin
+
+debian/signing-milter.etc.makefile etc/signing-milter/Makefile
+debian/signingtable.example etc/signing-milter/signingtable
