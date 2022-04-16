@@ -21,28 +21,19 @@ set -e
 case "$1" in
     install)
         echo "Setting up signing-milter group and user"
-        # Now we have to ensure the following state:
-        # /etc/passwd: mysql:x:100:101:MySQL Server:/nonexistent:/bin/false
-        # /etc/group:  mysql:x:101:
-        #
-        # Sadly there could any state be present on the system so we have to
-        # modify everything carefully i.e. not doing a chown before creating
-        # the user etc...
-        # Copied from mysql-server 5.5
-
-        # creating mysql group if he isn't already there
+        # creating signing-milter group if he isn't already there
         if ! getent group signing-milter >/dev/null; then
-            # Adding system group: mysql.
+            # Adding system group: signing-milter.
             addgroup --system signing-milter >/dev/null
         fi
 
-        # creating mysql user if he isn't already there
+        # creating signing-milter user if he isn't already there
         if ! getent passwd signing-milter >/dev/null; then
-            # Adding system user: mysql.
+            # Adding system user: signing-milter.
             adduser \
             --system \
             --disabled-login \
-            --ingroup mysql \
+            --ingroup signing-milter \
             --no-create-home \
             --home /nonexistent \
             --gecos "signing-milter" \
