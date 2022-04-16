@@ -1,31 +1,10 @@
-#
-#  signing-milter - debian/
-#  Copyright (C) 2010-2020  Andreas Schulze
-#
-#  This program is free software; you can redistribute it and/or modify
-#  it under the terms of the GNU General Public License as published by
-#  the Free Software Foundation; only version 2 of the License is applicable.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License along
-#  with this program; if not, write to the Free Software Foundation, Inc.,
-#  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-#
-#  Authors:
-#    Andreas Schulze <signing-milter at andreasschulze.de>
-#
-#
-
 Source: signing-milter
 Section: mail
 Priority: optional
 Maintainer: Andreas Schulze <debian@andreasschulze.de>
 Build-Depends: cdbs
  , debhelper (>= 10)
+ , dh-systemd (>= 1.5)
  , lintian
  , shellcheck
  , pkg-config
@@ -39,7 +18,7 @@ Package: signing-milter
 Architecture: any
 Pre-Depends: adduser
 Depends: ${misc:Depends}
- , ${shlibs:Depends}, daemontools-run, tinycdb
+ , ${shlibs:Depends}, tinycdb
 Description: Sign email via milter protocol
  signing-milter  uses  the  milter  interface, originally distributed as
  part of version 8.11 of sendmail(8), to  provide  signing  service  for

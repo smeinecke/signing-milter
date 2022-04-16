@@ -1,3 +1,9 @@
+signing-milter (20220426) stable; urgency=medium
+
+  * Replace daemontools by systemd service
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Sat, 26 Apr 2022 03:33:00 +0200
+
 signing-milter (20200719) stable; urgency=medium
 
   * Outlook-Problem gefixt

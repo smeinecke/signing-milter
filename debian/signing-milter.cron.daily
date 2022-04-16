@@ -27,6 +27,6 @@
 if [ "${DISABLE_DAILY_STATISTIK_LOGGING}" != "yes" ]; then
     # ... und nicht stuendliche Statistik aktiviert ist
     if [ "${DISABLE_HOURLY_STATISTIK_LOGGING}" = "yes" ]; then
-        svc -a /var/lib/supervise/signing-milter
+        systemctl reload signing-milter
     fi
 fi
