@@ -1,3 +1,3 @@
 signing-milter usr/sbin
 
-debian/etc/signing-milter/ etc/signing-milter/
+debian/etc/signing-milter etc/signing-milter
