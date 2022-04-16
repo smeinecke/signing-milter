@@ -19,7 +19,7 @@ set -e
 
 
 case "$1" in
-    install)
+    configure)
         echo "Setting up signing-milter group and user"
         # creating signing-milter group if he isn't already there
         if ! getent group signing-milter >/dev/null; then
@@ -40,8 +40,7 @@ case "$1" in
             --shell /bin/false \
             signing-milter >/dev/null
         fi
-    ;;
-    configure)
+
         echo "Setting up signing-milter folder permissions"
         chgrp --changes signing-milter /etc/signing-milter/
         chmod --changes 0750 /etc/signing-milter/
