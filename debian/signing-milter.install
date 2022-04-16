@@ -1,2 +1,3 @@
 signing-milter usr/sbin
-run_signing-milter usr/share/signing-milter
+
+debian/etc/signing-milter etc/

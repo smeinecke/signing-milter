@@ -30,9 +30,3 @@ include /usr/share/cdbs/1/class/makefile.mk
 
 DEB_MAKE_CHECK_TARGET = check
 
-clean::
-	chmod -x run_signing-milter
-
-install/signing-milter::
-	chmod +x run_signing-milter
-	find debian/ -type f | while read f ; do head -n1 $$f | grep --silent 'sh$$' && shellcheck --exclude SC1091 $$f || : ; done
