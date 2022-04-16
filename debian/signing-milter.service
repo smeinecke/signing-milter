@@ -4,7 +4,7 @@ After=local-fs.target network.target systemd-tmpfiles-setup.service
 
 [Service]
 EnvironmentFile=/etc/default/signing-milter
-WorkingDirectory="${WORKDIR}/"
+WorkingDirectory="/etc/signing-milter/"
 ExecReload=/bin/kill -HUP $MAINPID
 ExecStart=/usr/sbin/signing-milter ${OPTIONS}
 Restart=on-failure
