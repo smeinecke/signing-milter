@@ -5,4 +5,4 @@
 # and in the same directory as the certificate file.
 #
 # Example:
-# mail@example.com  /etc/certs/private/mail_example_com-cert+key.pem
+# mail@example.com  /etc/signing-milter/certs/mail_example_com-cert+key.pem
