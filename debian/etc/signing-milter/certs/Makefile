@@ -1,3 +1,3 @@
 all:
-	chown signing-milter /etc/certs/smime/*
-	chmod 400 /etc/certs/smime/*.pem
+	chown signing-milter /etc/signing-milter/certs/*
+	chmod 400 /etc/signing-milter/certs/*.pem
