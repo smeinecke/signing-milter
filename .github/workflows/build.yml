@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os-version: ["stretch", "buster", "bullseye"]    
+        os-version: ["stretch", "buster", "bullseye"]
     steps:
       - uses: actions/checkout@v2
       - uses: jtdor/build-deb-action@v1
@@ -31,3 +31,18 @@ jobs:
         with:
           name: "packages-${{ matrix.os-version }}"
           path: ./debian/artifacts/*
+      - name: Github pages APT repo
+        uses: smeinecke/apt-repo-action@master
+        if: github.event.inputs.release
+        with:
+          github_token: ${{ secrets.GH_PAT }}
+          repo_supported_arch: amd64
+          repo_supported_version: |
+            stretch
+            buster
+            bullseye
+          file: |
+            ./debian/artifacts/*
+          file_target_version: ${{ matrix.os-version }}
+          private_key: ${{ secrets.APT_SIGNING_KEY }}
+          key_passphrase: ""
