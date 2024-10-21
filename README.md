@@ -13,8 +13,8 @@ apt-get install libcdb1 libmilter1.0.1 tinycdb
 Download the current release (no Debian repository at the time of writing) for your Debian version and install the .deb file:
 
 ```bash
-wget https://github.com/smeinecke/signing-milter/releases/latest/download/signing-milter_20220416-bullseye_amd64.deb
-dpkg -i signing-milter_20220416-bullseye_amd64.deb
+wget https://github.com/smeinecke/signing-milter/releases/download/20220416/signing-milter_20220426-bookworm_amd64.deb
+dpkg -i signing-milter_20220426-bookworm_amd64.deb
 ```
 
 ## Basic postfix configuration
