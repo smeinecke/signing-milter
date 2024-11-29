@@ -2,7 +2,7 @@
 Hash: SHA512
 
 Codename: buster
-Date: Fri, 29 Nov 2024 13:13:31 UTC
+Date: Fri, 29 Nov 2024 13:14:02 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
@@ -29,17 +29,17 @@ SHA256:
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmdJvfsACgkQLfCqaigF
-WCl9cQ//Rcn7ewkyXU0LVVLPYrADfrmLV+dDXQ5htTQquE6YzqyNKKXyww6cMpSM
-npHOXZE4NQfb4Oy4InbukHmOG7pbH4OvGGAc+k6LI5XAj0VgtFTognA1ntsCc+Rw
-1AcaNsa8NiPg/djrOmBbltzu1YjUopxPI/TNKR6oS6g0ie13rKxNwBcW+CYpiGwa
-CWfA+TzXOkbps6jdwmZ+cuVcVwK7qnunG5bCiSkY9mYbQo3C2d32/KUCEQv5kbKs
-fVS/peGEOhUs4PKbGXBtWrD6Y9QmMaq4cmwChrLHXenOGxipzo+I8lzRKarRY30M
-oztENz1lLcWYX3FV1Q1OrlUcLBeP2quT0zbQlyGGxyBPcq+dASH/t7mBW5PSF9XH
-OKOe+yjJnWbxaaFFOgqib5ch8F0AMM0afI+3gQ8K1MtyOXyNq3rkDomAhrAWM93S
-tpFLWy+aJeCZFiE+msOrD6qRq6JZbU3u9Ku1nIYjpT1wF6L4pYJXclqRfRIDPD6g
-pklx5MUfe9OFBDuHqgC9dW4mG0rLScCNlUGOtl6cq7kWZSbowR7WLxmJaUCGx1fZ
-0dm6v6OYYq7JlwtYVcSjWozBgrPmgn5Jpvkya4sqWZl+tWeR7i/QGJvkENcFJdMa
-czhyRfYsNN8hG1+7nEAFJsFYKvEYXaHGqJleu4d/NnV/ZX33DJA=
-=iia0
+iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmdJvhoACgkQLfCqaigF
+WCnK5BAApUq07GUI1gFDHjwAliwIai1VInHz+3RABpqtszJPRqenfVQ9ixdzCXfn
+XjrOwMC6k9y90D6NRQ3nFojYl91PK3UvnaLsSrrI1CzHmQtjKXOSmYe1szSHFrhp
+kSugh7T0fIojl8NftwVYwtYVY5ApbQHIKI2sSl/r4zcZDB995ZS+qapVx3zRbDRI
+UbTs7qvbfXMIyFgoUxm+7hccuqvy0q6lErf3W57rLdC2XQfSiyWZfK0n5aplYbyF
+n6jHQBwj5uuKJoCGSdmm9/u+bHKJ22o6ot6Mhe5RDKadhC18r61tzwyFv2QZkf50
+8n+dxLjNuatYnfkqa16qXG50ACrPHhbnjRsouB6dvPsZS0Iiv0WWJlgr3MFb50k7
+0p9LCW4ZbGl5cWA0IdJGrl2RJikLchb8BqZvx3ExtyD/3MjD1Ed1CutjEiHIbq7s
+a7KBGqXO51vQiHIHMuGbUweblH8fsLG9iKwpRZygW5jtZMr+nOZvawFFw3pmxMCT
+uPkDgFEkeQzy9HIoizzznRNH3+1CzWnUaNKm31ZB+o3hXLqHbegax63iCVdot3jC
+xjh2PvO361Z/tUtboPw+julovxQuVZtKOOFIloZuKZuznwOa8izmdXKOjGBEOBe6
+L/MKOw1ZGfymi9ngjIWdiIgr1LY29Kz7ppUMUH+afimI2BrEAew=
+=abLw
 -----END PGP SIGNATURE-----

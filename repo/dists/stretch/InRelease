@@ -2,7 +2,7 @@
 Hash: SHA512
 
 Codename: stretch
-Date: Fri, 29 Nov 2024 13:13:31 UTC
+Date: Fri, 29 Nov 2024 13:14:02 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
@@ -29,17 +29,17 @@ SHA256:
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmdJvfsACgkQLfCqaigF
-WCkvUBAAidefLVXoGEKS4oUrVGv9uPkwqxUAcEssN4k4jRDSu3nvEgCRDwnfRRX0
-ZNS7+E6XKrvj6ewaDEX4aeXoFwthQRxighVb8UWDJuPMyJ+vTUvtPWDzwLWWoV4y
-BfZzL+QL9o50KjyUdVc+EbO5L77e4ugHSLiqmA4ZQ+qWQ6baBJA2/n2vodmJ2/cp
-mZtzUujiIBe/DTw9w0brDnbqO2CcyEV3/1dulYNmaSeDyfFkMs6zOw7O7bj9UO61
-aWTd19ZXF456qnzC/Nyy17I/Uc6gQhPmzuPvMB6SIcedT0rdC9r4Nl0RsyfPa+my
-TCZAGAgn64Jn7OaJsaumCFR/pUs2Kd/u6g4B+dJD4Yxh/xrL1x3RR6gi+PQjM4DW
-/vlNYXyv8yxBsi5qoqxmeltuXXatV8AJkIcL9aWjCvyT6gNm+rnshw+w5kXkdLW3
-wAnGlQ+lLwQlbNmni/lkRBTvugkTBXkP+Ocl2LfzGLk2RF0ITtINHrDT0bpzfrP2
-Nc7xmbSlr8qw5cTHVhIRccw0EKU3tpGN5st8Ob2iuxgEMz2y8t4u3fcVFdMJga2y
-upcQfrwomXYBXkqe8dNWrgA/QkCXJug+De9SScHv8qtCYW62q5NvR6C6wUqf4OPt
-HNwl2OPaHlISSB9OZttzQXqNf9txOS1T8ram5nNZvYIS1qYj8xc=
-=geI/
+iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmdJvhoACgkQLfCqaigF
+WCljsA/+Ngvdoyaq3m7OMJy+1C1QcFeE5dwp3ykMesalI2JhbqnQo7dkEh90J24n
+Pfk8JRF8SW2Wcw3mdNyvl1oRRiWItZRsja/FsxBmU9WODT30L8E02mmAgYR2jFWB
+T7JJ39RvqvQvhmhtzg8BbvUujCpUpAOyBbhMs7mV8AaMRr9q+2XcFd/lgViH1Bku
+XGUVnGk1pvYqJiWUmxbT1PenuwlqXyIetDf+C9QUVZkZSkDfAgAjFj8+WGjvbbI/
+OdHPdZwnYM/t6IoxB4VwvWjCzwKG0XgA6fqyd6TY26Dnly5h1rfGO+B8YWuFaBh6
+DMfblTjBgDE/MDKA6+gCJeOyoDJSoOVT3XBl+XAUm34qLGR9YO5tnuOB4Ehxm3Mh
+FQRCFXArf6HTG1oejrWhooIr0OO5n8Qxtbe2M/DUDXH3M3xRUVA+pJy4BRWor8Y2
+isAUEQLrxKNI/Z2GUKYsrdniJDw95SbKfbALkZYibZ4qA72+bkJ0yG89qEZUlXIA
+j72iptes8JoUa8dX0Yir1abbRm30/ciK3QTym4JoyO+oI0Axxv9ZHdAdL7nhuj+W
+Kfx0dQtleT96wJpyoCy0mg+ckjGWN0tSD8dzQwifraayvNtADVi+7yZyvFPnnhtc
+QW+wapCkIVl1IRSB6im/v41avwaGVXKus1feCs5M0cdQy7ryJ6U=
+=Yf/l
 -----END PGP SIGNATURE-----
