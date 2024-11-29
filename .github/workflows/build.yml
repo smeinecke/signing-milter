@@ -48,14 +48,18 @@ jobs:
             if [ "$arch" = "arm64" ]; then
               dpkg --add-architecture arm64
               apt-get update
+            fi
+          extra-build-deps: devscripts git dpkg-cross
+          before-build-hook: |
+            dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'
+            arch="${{ matrix.arch }}"
+            if [ "$arch" = "arm64" ]; then
               DEBIAN_FRONTEND=noninteractive apt-get -y install libssl-dev:arm64 tinycdb:arm64 libmilter-dev:aarch64 libcdb-dev:arm64
               mkdir -p /etc/dpkg/buildflags.d/
               cat /etc/dpkg/buildflags.conf
               echo "export DEB_LDFLAGS_APPEND='-L/usr/lib/aarch64-linux-gnu'" | tee /etc/dpkg/buildflags.d/custom.conf
               echo "export DEB_BUILD_ARCH=arm64" | tee /etc/dpkg/buildflags.d/custom.conf
             fi
-          extra-build-deps: devscripts git dpkg-cross
-          before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
           buildpackage-opts: --build=binary --no-sign -d
       - name: Upload deb files
         uses: actions/upload-artifact@v4
