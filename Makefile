@@ -25,7 +25,9 @@ LIBS    = $(shell pkg-config --libs libcdb)
 LIBS   += -lmilter
 LIBS   += -lpthread
 LIBS   += $(shell pkg-config --libs openssl)
-CC     := gcc
+ifeq ($(origin CC),default)
+CC      = gcc
+endif
 
 all: signing-milter check
 
