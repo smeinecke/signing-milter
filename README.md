@@ -18,6 +18,7 @@ This repository replaces the `daemontools` service manager used in the original 
 #### Automatically via script
 ```bash
 wget -O- https://smeinecke.github.io/signing-milter/add-repository.sh | bash
+apt-get install signing-milter
 ```
 
 #### Manually
@@ -25,11 +26,7 @@ wget -O- https://smeinecke.github.io/signing-milter/add-repository.sh | bash
 apt-get install wget lsb-release ca-certificates
 wget -O /usr/share/keyrings/smeinecke.github.io-signing-milter.key https://smeinecke.github.io/signing-milter/public.key
 echo "deb [signed-by=/usr/share/keyrings/smeinecke.github.io-signing-milter.key] https://smeinecke.github.io/signing-milter/repo $(lsb_release -sc) main" > /etc/apt/sources.list.d/signing-milter.list
-```
-
-## Install signing-milter package
-```bash
-apt-get install signing-milter
+apt-get update && apt-get install signing-milter
 ```
 
 ## Basic postfix configuration
