@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-debs:
+  build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -20,7 +20,13 @@ jobs:
         os-version: ["debian:buster", "debian:bullseye", "debian:bookworm", "ubuntu:noble", "ubuntu:jammy", "ubuntu:focal"]
         arch: ["amd64", "arm64"]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - name: Extract OS Flavor and Version
+        id: extract-os
+        run: |
+          os_version="${{ matrix.os-version }}"
+          echo "flavor=${os_version%%:*}" >> $GITHUB_ENV
+          echo "version=${os_version##*:}" >> $GITHUB_ENV
       - uses: jtdor/build-deb-action@v1
         env:
           DEB_BUILD_OPTIONS: noautodbgsym
@@ -28,17 +34,17 @@ jobs:
           docker-image: "${{ matrix.os-version }}"
           host-arch: "${{ matrix.arch }}"
           extra-build-deps: devscripts git dpkg-cross
-          before-build-hook: "dch --local ~${os_version##*:} 'GitHub build for ${{ matrix.os-version }}'"
+          before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
           buildpackage-opts: --build=binary --no-sign -d
       - name: Upload deb files
         uses: actions/upload-artifact@v4
         with:
-          name: "packages-${os_version##*:}-${{ matrix.arch }}"
+          name: "packages-${{ env.version }}-${{ matrix.arch }}"
           path: ./debian/artifacts/*
 
   merge-artefacts:
     runs-on: ubuntu-latest
-    needs: build-debs
+    needs: build
     steps:
       - name: debian-packages
         uses: actions/upload-artifact/merge@v4
@@ -59,7 +65,7 @@ jobs:
 
   add_repo:
     runs-on: ubuntu-latest
-    needs: build-debs
+    needs: build
     strategy:
       max-parallel: 1
       matrix:
