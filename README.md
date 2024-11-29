@@ -3,18 +3,33 @@ signing-milter enables you to s/mime sign an ordinary mail while passing a MTA. 
 
 This repository replaces the `daemontools` service manager used in the original release by the Debian standard `systemd` service.
 
-## Installation
-Install the required dependencies (if not already done):
+## Debian/Ubuntu Repository
 
-```bash
-apt-get install libcdb1 libmilter1.0.1 tinycdb
+### Currently supported debian/ubuntu versions:
+ * buster
+ * bullseye
+ * bookworm
+ * focal
+ * jammy
+ * noble
+
+### How to add this repository:
+
+#### Automatically via script
+```
+wget -O- https://smeinecke.github.io/signing-milter/add-repository.sh | bash
 ```
 
-Download the current release (no Debian repository at the time of writing) for your Debian version and install the .deb file:
+#### Manually
+```
+apt-get install wget lsb-release ca-certificates
+wget -O /usr/share/keyrings/smeinecke.github.io-signing-milter.key https://smeinecke.github.io/signing-milter/public.key
+echo "deb [signed-by=/usr/share/keyrings/smeinecke.github.io-signing-milter.key] https://smeinecke.github.io/signing-milter/repo $(lsb_release -sc) main" > /etc/apt/sources.list.d/signing-milter.list
+```
 
-```bash
-wget https://github.com/smeinecke/signing-milter/releases/download/20220416/signing-milter_20220426-bookworm_amd64.deb
-dpkg -i signing-milter_20220426-bookworm_amd64.deb
+## Install signing-milter package
+```
+apt-get install signing-milter
 ```
 
 ## Basic postfix configuration
