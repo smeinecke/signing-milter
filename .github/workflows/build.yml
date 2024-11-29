@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os-version: ["debian:buster", "debian:bullseye", "debian:bookworm", "ubuntu:noble", "ubuntu:jammy", "ubuntu:focal"]
-        arch: ["amd64"] #, "arm64"]
+        arch: ["amd64", "arm64"]
     steps:
       - uses: actions/checkout@v4
       - name: Extract OS Flavor and Version
@@ -45,9 +45,8 @@ jobs:
             if [ "$arch" = "arm64" ]; then
               dpkg --add-architecture arm64
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get -y install libssl-dev:arm64 tinycdb:arm64 libmilter-dev:arm64 libcdb-dev:arm64
             fi
-          extra-build-deps: devscripts git dpkg-cross libssl-dev tinycdb libmilter-dev libcdb-dev
+          extra-build-deps: devscripts git dpkg-cross cdbs libssl-dev tinycdb libmilter-dev libcdb-dev libssl-dev:arm64 tinycdb:arm64 libmilter-dev:arm64 libcdb-dev:arm64 cdbs:arm64
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
           buildpackage-opts: --build=binary --no-sign -d
       - name: Upload deb files
@@ -84,7 +83,7 @@ jobs:
       max-parallel: 1
       matrix:
         os-version: ["buster", "bullseye", "bookworm", "noble", "jammy", "focal"]
-        arch: ["amd64"] #, "arm64"]
+        arch: ["amd64", "arm64"]
     steps:
       - uses: actions/download-artifact@v4
         with:
