@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os-version: ["debian:buster", "debian:bullseye", "debian:bookworm", "ubuntu:noble", "ubuntu:jammy", "ubuntu:focal"]
-        arch: ["amd64", "arm64"]
+        arch: ["amd64"] #, "arm64"]
     steps:
       - uses: actions/checkout@v4
       - name: Extract OS Flavor and Version
@@ -84,7 +84,7 @@ jobs:
       max-parallel: 1
       matrix:
         os-version: ["buster", "bullseye", "bookworm", "noble", "jammy", "focal"]
-        arch: ["amd64", "arm64"]
+        arch: ["amd64"] #, "arm64"]
     steps:
       - uses: actions/download-artifact@v4
         with:
