@@ -2,7 +2,7 @@
 Hash: SHA512
 
 Codename: jammy
-Date: Fri, 29 Nov 2024 13:15:31 UTC
+Date: Fri, 29 Nov 2024 13:16:01 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
@@ -29,17 +29,17 @@ SHA256:
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmdJvnMACgkQLfCqaigF
-WCnS4Q//ZnwGB4iB7XZHytuD3kXjNHR0Z5u6pVoKMiCaxMcCImNzk+h5orYyR+BU
-VsCSuTq9GP8+qTKBL+2x2/SXQA3qsATpwCTZoHE/SQohEvRgaHcI55UVGqrf5/XJ
-4oLcx17QJqINQHuBw2k3ckc5yD+NtKIb6P4sw2ZrDfIp+q4el1UrdJbaI9Fcgt3a
-92mbJWT1sIe6l4q8p3zY/wCf+5o5B6lfyfc7PytMUp7yDjMlQh/4ej1iVsjGWG5a
-0vckXM1woDJ7JEJi6J+6eC9mWxVCNPHxWUwZFtG8yLcu9hdPQ8jrOdHh6XjzDxDb
-JFPCoZpDDVR2tdbc+9gAxBWwTvDQPezK7LYucGKtEYFxVKp1fYxtB8yHXNv97fgt
-Lm5caJ+akWRcQEDrz9bthU3eXvAfZwD9OyC1cdDdcZvh4ap3+u7KfET4pewRZBiY
-DG/5MhZApK1hn2PVO09Enls51jisAK3J66KQiov2LobdRG3ISEOKZKDHuXD75gjA
-2GT5dRMF/y+zzjviho+8cXCXP/AVaEErvFwTRuD+tgxHuA6H8cA1coTfwoHmlxP/
-Xwdg55XgawNaCFjlY9+AvrGGnBpnT3/2fuo6f5fiwdXnKHTAbEo5z7SaPxIYWIC9
-xRYV/aiiwoLPW9jl82d9IYl3gyZ0tQJqYJalSWKZ9z+tJZwQef8=
-=aedi
+iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmdJvpEACgkQLfCqaigF
+WCk4xBAAgLZiT6FJd5gJqxPakLsrknEPXKpjdolXI1Bg5vaVCW8/HY7oinSBKhsq
+RS8+6AnAjJ0woLg65dM+fbx0q11fiA/67i+EmrXQ5t//Y15eEE/Q6slWu23MSwUw
+XzzV6BVFz3GtkknO2eMDluhOIrTlz6J6QtD4RYGK4AQPp3fqx7jGzIzctRIeFkPj
+hA1r5Pi24tKS6h5MvoqhxYDXq2DwqRD2oER0RRYr1j66DtWvy2jO1cRR71iHfzHD
+HoEAQs02HBaW+TjMUDg4iscPaTvkCSSAexcTnsChmlBXHG9pUNYOZFG39QtHkdJT
+mYv0cfttIrrdnhjXmPlDQT9069fKpV+nrkzKRcwIOf7Ti/RckBMV19KHsq3WEFgi
+4Spt7uaV/co0cJvjH01+wK4K5Wj7KaVarGS/8xuwzMqF7hnU+gaqygdmis9H49FL
+xFr5fdiaOTBumFG98Li+Rqpx5MqnggWKj3Ryo5xAyCsBYEr+7tjBr/aIS3DKy+Ms
+jIx8rUgJSeF066MlUbDnWuud4Obd+W1CVyDsIgNPhxjkBLmL13rBjwk2ODP87fnz
+Cudv7IX6zEiwjf88uu0/ZiiZBIEVI5Ni0ZcOSzVo0He9Y7Zunz2ZmQBEjNjKrgEx
+ktvmleByFt2lpUs2lV9Sv68oQidD9CvKhBcjdVB4seah70rhGHU=
+=5drT
 -----END PGP SIGNATURE-----
