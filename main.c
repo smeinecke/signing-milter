@@ -1,6 +1,6 @@
 /*
  * signing-milter - main.c
- * Copyright (C) 2010-2020  Andreas Schulze
+ * Copyright (C) 2010-2023  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,6 +67,8 @@ int main(int argc, char** argv) {
     struct group*  gr;
     struct stat    st;
     int            localsocket = 1;
+    mode_t         socket_mode;
+    char*          socket_mode_str;
 
 
     /*
@@ -82,11 +84,13 @@ int main(int argc, char** argv) {
             break;
         case 'c': /* clientgroup */
             opt_clientgroup = optarg;
-            if ((gr = getgrnam(opt_clientgroup)) == NULL) {
-                logmsg(LOG_ERR, "unknown clientgroup: getgrnam(%s) failed", opt_group);
-                exit(EX_DATAERR);
+            if (strcmp(opt_clientgroup, ":relax") != 0) {
+              if ((gr = getgrnam(opt_clientgroup)) == NULL) {
+                  logmsg(LOG_ERR, "unknown clientgroup: getgrnam(%s) failed", opt_group);
+                  exit(EX_DATAERR);
+              }
+              client_gid = gr->gr_gid;
             }
-            client_gid = gr->gr_gid;
             break;
         case 'd': /* Loglevel */
             opt_loglevel = (int) strtoul(optarg, &p, 10);
@@ -246,7 +250,7 @@ int main(int argc, char** argv) {
         root_gid = gr->gr_gid;
 
         /* clientgroup muss != root und != opt_group sein */
-        if ((client_gid == gid) || (client_gid == root_gid)) {
+        if (((client_gid == gid) || (client_gid == root_gid)) && (opt_clientgroup != NULL) && strcmp(opt_clientgroup, ":relax") != 0) {
             logmsg(LOG_ERR, "clientgroup %s must be neither %s nor %s", opt_clientgroup, "root", opt_group);
             exit(EX_DATAERR);
         }
@@ -256,12 +260,20 @@ int main(int argc, char** argv) {
             logmsg(LOG_ERR, "chown(%s, %i, %i) failed: %m", p, uid, client_gid, strerror(errno));
             exit(EX_SOFTWARE);
         }
-        if (chmod(p, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) != 0) {
-            logmsg(LOG_ERR, "chmod(%s, 0660) failed: %m", p, strerror(errno));
+
+        socket_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
+        socket_mode_str = "0660";
+        if ((opt_clientgroup != NULL) && strcmp(opt_clientgroup, ":relax") == 0) {
+          socket_mode = socket_mode | S_IROTH | S_IWOTH;
+          socket_mode_str = "0666";
+        }
+
+        if (chmod(p, socket_mode) != 0) {
+            logmsg(LOG_ERR, "chmod(%s, %s) failed: %m", p, socket_mode_str, strerror(errno));
             exit(EX_SOFTWARE);
         }
 
-        logmsg(LOG_INFO, "changed socket %s to owner/group: %i/%i, mode: 0660", opt_miltersocket, uid, client_gid);
+        logmsg(LOG_INFO, "changed socket %s to owner/group: %i/%i, mode: %s", opt_miltersocket, uid, client_gid, socket_mode_str);
     }
 
     /* gid/uid setzen */

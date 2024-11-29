@@ -1,6 +1,6 @@
 /*
  * signing-milter - callbacks.c
- * Copyright (C) 2010-2020  Andreas Schulze
+ * Copyright (C) 2010-2021  Andreas Schulze
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -274,6 +274,14 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
     }
 
+    if (strcasecmp(headerf, HEADERNAME_SKIP_SIGNING) == 0) {
+        /*
+         * we can't simply 'return SMFIS_ACCEPT' as we must remove the header later
+         */
+        ctxdata->mailflags |= MF_SKIP_SIGNING;
+        logmsg(LOG_DEBUG, "callback_header: header %s found: skip signing", headerf);
+    }
+
     return SMFIS_CONTINUE;
 }
 
@@ -298,6 +306,11 @@ sfsistat callback_eoh(SMFICTX* ctx) {
             ctxdata->queueid = "unknown";
             logmsg(LOG_WARNING, "%s: warning: callback_eoh: smfi_getsymval(queueid) failed", ctxdata->queueid);
         }
+    }
+
+    if (ctxdata->mailflags & MF_SKIP_SIGNING) {
+       logmsg(LOG_INFO, "%s: skip signing requested by header", ctxdata->queueid);
+       return SMFIS_CONTINUE;
     }
 
     /* RFC 2045: MIME-Version Header ist Pflicht, wenn Content-* Header benutzt werden */
@@ -365,6 +378,10 @@ sfsistat callback_body(SMFICTX* ctx, unsigned char* bodyp, size_t len) {
         return SMFIS_CONTINUE;
     }
 
+    if (ctxdata->mailflags & MF_SKIP_SIGNING) {
+       return SMFIS_CONTINUE;
+    }
+
     /*
      * wenn die Mail eine Multipart-Mime-Mail ist,
      * beginnt sie mit einer Preambel ( RFC 2046, 5.1.1 )
@@ -406,6 +423,13 @@ sfsistat callback_eom(SMFICTX* ctx) {
     if ((ctxdata = (CTXDATA*) smfi_getpriv(ctx)) == NULL) {
         logmsg(LOG_DEBUG, "callback_eom: context is not set, continue");
         return SMFIS_CONTINUE;
+    }
+
+    if (ctxdata->mailflags & MF_SKIP_SIGNING) {
+        if (smfi_chgheader(ctx, HEADERNAME_SKIP_SIGNING, 0, NULL) != MI_SUCCESS) {
+            logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SKIP_SIGNING);
+        }
+       return SMFIS_CONTINUE;
     }
 
     /*

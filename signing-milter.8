@@ -1,6 +1,6 @@
 .\"
 .\"signing-milter - signing-milter.8
-.\"Copyright (C) 2010-2020  Andreas Schulze
+.\"Copyright (C) 2010-2023  Andreas Schulze
 .\"
 .\"This program is free software; you can redistribute it and/or modify
 .\"it under the terms of the GNU General Public License as published by
@@ -35,6 +35,10 @@ uses the
 interface, originally distributed as part of version 8.11 of
 .B sendmail(8),
 to provide signing service for mail transiting a milter-aware MTA.
+Messages are signed if the RFC5321.MailFrom is found in a signing-table,
+certs are present and usable and a header
+.I X-Skip-Signing
+does not exist.
 .\"
 .SH OPTIONS
 .TP
@@ -55,6 +59,10 @@ to be read/writeable by group
 The group must be any group other then root and the group
 .I signing-milter
 runs as. The parameter is required unless using an TCP socket.
+Specify the invalid groupname
+.B
+:relax
+to set the socket's group to root and mode to 0666.
 .TP
 .B \-d loglevel
 Set the loglevel. The default level 3 logs all errors. Valid values are
@@ -220,8 +228,9 @@ logged.
 .SH STARTUP AND LOGGING
 .I signing-milter
 is designed to run by a supervisor like daemontools or runit. It does not fork
-as daemon in background.  So all logging goes to syslog using facility LOG_MAIL.
-All messages except priority LOG_NOTICE and LOG_INFO are also sent to stdout.
+as daemon in background. Unless option \-l is given, all logging goes to syslog
+using facility LOG_MAIL. All messages except priority LOG_NOTICE and LOG_INFO
+are also sent to stdout.
 .\"
 .SH BUGS
 The private signing keys must not be protected by password.
@@ -252,5 +261,5 @@ was written by Andreas Schulze. Portions of Code are inspired or copied from
 postfix and opendkim.
 .\"
 .SH COPYRIGHT
-Copyright (c) 2010-2015, Andreas Schulze. All rights reserved.
+Copyright (c) 2010-2021, Andreas Schulze. All rights reserved.
 .\" _END_

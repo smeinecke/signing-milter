@@ -1,3 +1,11 @@
+202302xx
+ Fix .f https://github.com/andreasschulze/signing-milter/issues/3
+ socketmode may be relaxed with '-c :relax'
+
+20210822
+ Signatur kann mit einem Header 'x-skip-signing' pro Nachricht deaktiviert
+ werden (Ticket #6)
+
 20200719
  debian/ funktioniert mit den Debian-Versionen Stretch und Buster
 
