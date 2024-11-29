@@ -108,4 +108,5 @@ jobs:
             *~${{ matrix.os-version }}*.deb
           file_target_version: ${{ matrix.os-version }}
           private_key: ${{ secrets.APT_SIGNING_KEY }}
+          public_key: ${{ vars.APT_PUBLIC_KEY }}
           key_passphrase: ""
