@@ -45,8 +45,9 @@ jobs:
             if [ "$arch" = "arm64" ]; then
               dpkg --add-architecture arm64
               apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get -y install libssl-dev:arm64 tinycdb:arm64 libmilter-dev:arm64 libcdb-dev:arm64 cdbs:arm64
             fi
-          extra-build-deps: devscripts git dpkg-cross cdbs libssl-dev tinycdb libmilter-dev libcdb-dev libssl-dev:arm64 tinycdb:arm64 libmilter-dev:arm64 libcdb-dev:arm64 cdbs:arm64
+          extra-build-deps: devscripts git dpkg-cross
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
           buildpackage-opts: --build=binary --no-sign -d
       - name: Upload deb files
