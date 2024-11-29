@@ -40,11 +40,12 @@ jobs:
             if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
               sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list
               sed -i 's,/ubuntu ,/ubuntu-ports ,' /etc/apt/sources.list
+              cat /etc/apt/sources.list
             fi
             if [ "$arch" = "arm64" ]; then
               dpkg --add-architecture arm64
               apt-get update
-              apt install libssl-dev:arm64 tinycdb:arm64 libmilter-dev:arm64 libcdb-dev:arm64
+              DEBIAN_FRONTEND=noninteractive apt-get -y install libssl-dev:arm64 tinycdb:arm64 libmilter-dev:arm64 libcdb-dev:arm64
             fi
           extra-build-deps: devscripts git dpkg-cross
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
