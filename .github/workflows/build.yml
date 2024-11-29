@@ -25,23 +25,25 @@ jobs:
         id: extract-os
         run: |
           os_version="${{ matrix.os-version }}"
-          flavor=${os_version%%:*}
-          arch="${{ matrix.arch }}"
           echo "flavor=${os_version%%:*}" >> $GITHUB_ENV
           echo "version=${os_version##*:}" >> $GITHUB_ENV
-          setup_hook="dpkg --add-architecture arm64"
-          if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
-            setup_hook="/usr/bin/sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list"
-            setup_hook="ls /etc/apt/"
-          fi
-          echo "setup_hook='${setup_hook}'" >> $GITHUB_ENV
       - uses: jtdor/build-deb-action@v1
         env:
           DEB_BUILD_OPTIONS: noautodbgsym
         with:
           docker-image: "${{ matrix.os-version }}"
           host-arch: "${{ matrix.arch }}"
-          setup-hook: "${{ env.setup_hook }}"
+          setup-hook: |
+            os_version="${{ matrix.os-version }}"
+            flavor=${os_version%%:*}
+            arch="${{ matrix.arch }}"
+            if [ "$arch" = "arm64" ]; then
+              dpkg --add-architecture arm64
+            fi
+            if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
+              sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list
+            fi
+            apt-get update
           extra-build-deps: devscripts git dpkg-cross libssl-dev tinycdb libmilter-dev libcdb-dev
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
           buildpackage-opts: --build=binary --no-sign -d
