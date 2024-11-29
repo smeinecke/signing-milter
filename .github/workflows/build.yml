@@ -25,7 +25,7 @@ jobs:
         env:
           DEB_BUILD_OPTIONS: noautodbgsym
         with:
-          docker-image: "${{ matrix.os-version }}-slim"
+          docker-image: "${{ matrix.os-version }}"
           host-arch: "${{ matrix.arch }}"
           extra-build-deps: devscripts git dpkg-cross
           before-build-hook: "dch --local ~${os_version##*:} 'GitHub build for ${{ matrix.os-version }}'"
