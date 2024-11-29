@@ -25,15 +25,22 @@ jobs:
         id: extract-os
         run: |
           os_version="${{ matrix.os-version }}"
+          flavor=${os_version%%:*}
+          arch="${{ matrix.arch }}"
           echo "flavor=${os_version%%:*}" >> $GITHUB_ENV
           echo "version=${os_version##*:}" >> $GITHUB_ENV
+          setup_hook=""
+          if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
+            setup_hook="sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list; apt-get update"
+          fi
+          echo "setup_hook='${setup_hook}'" >> $GITHUB_ENV
       - uses: jtdor/build-deb-action@v1
         env:
           DEB_BUILD_OPTIONS: noautodbgsym
         with:
           docker-image: "${{ matrix.os-version }}"
           host-arch: "${{ matrix.arch }}"
-          setup-hook: "apt-get update"
+          setup-hook: "${{ env.setup_hook }}"
           extra-build-deps: devscripts git dpkg-cross libssl-dev
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
           buildpackage-opts: --build=binary --no-sign -d
