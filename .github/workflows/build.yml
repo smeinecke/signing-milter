@@ -29,9 +29,9 @@ jobs:
           arch="${{ matrix.arch }}"
           echo "flavor=${os_version%%:*}" >> $GITHUB_ENV
           echo "version=${os_version##*:}" >> $GITHUB_ENV
-          setup_hook=""
+          setup_hook="echo"
           if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
-            setup_hook="sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list; apt-get update"
+            setup_hook="sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list"
           fi
           echo "setup_hook='${setup_hook}'" >> $GITHUB_ENV
       - uses: jtdor/build-deb-action@v1
