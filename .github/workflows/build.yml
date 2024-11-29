@@ -33,7 +33,8 @@ jobs:
         with:
           docker-image: "${{ matrix.os-version }}"
           host-arch: "${{ matrix.arch }}"
-          extra-build-deps: devscripts git dpkg-cross
+          setup-hook: "apt-get update"
+          extra-build-deps: devscripts git dpkg-cross libssl-dev
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
           buildpackage-opts: --build=binary --no-sign -d
       - name: Upload deb files
