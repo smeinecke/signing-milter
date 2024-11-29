@@ -31,7 +31,7 @@ jobs:
           echo "version=${os_version##*:}" >> $GITHUB_ENV
           setup_hook="echo"
           if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
-            setup_hook="sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list"
+            setup_hook="/usr/bin/sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list"
           fi
           echo "setup_hook='${setup_hook}'" >> $GITHUB_ENV
       - uses: jtdor/build-deb-action@v1
