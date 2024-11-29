@@ -32,6 +32,7 @@ jobs:
           setup_hook="echo"
           if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
             setup_hook="/usr/bin/sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list"
+            setup_hook="cat /etc/apt/sources.list"
           fi
           echo "setup_hook='${setup_hook}'" >> $GITHUB_ENV
       - uses: jtdor/build-deb-action@v1
@@ -41,7 +42,7 @@ jobs:
           docker-image: "${{ matrix.os-version }}"
           host-arch: "${{ matrix.arch }}"
           setup-hook: "${{ env.setup_hook }}"
-          extra-build-deps: devscripts git dpkg-cross libssl-dev
+          extra-build-deps: devscripts git dpkg-cross libssl-dev tinycdb libmilter-dev libcdb-dev
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
           buildpackage-opts: --build=binary --no-sign -d
       - name: Upload deb files
