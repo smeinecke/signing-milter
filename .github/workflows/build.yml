@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os-version: ["debian:buster", "debian:bullseye", "debian:bookworm", "ubuntu:noble", "ubuntu:jammy", "ubuntu:focal"]
-        arch: ["amd64"] # , "arm64"]
+        arch: ["amd64" , "arm64"]
     steps:
       - uses: actions/checkout@v4
       - name: Extract OS Flavor and Version
@@ -38,10 +38,23 @@ jobs:
             flavor=${os_version%%:*}
             arch="${{ matrix.arch }}"
             if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
-              sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources
-              sed -i 's,/ubuntu/ ,/ubuntu-ports/ ,' /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources
-              cat /etc/apt/sources.list
+              # check for deb822 source format
+              if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+                cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu-arm.sources
+                sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list.d/ubuntu-arm.sources
+                sed -i 's,/ubuntu/$,/ubuntu-ports/,' /etc/apt/sources.list.d/ubuntu-arm.sources
+                sed -i 's/^Components:/Architectures: arm64\nComponents:/' /etc/apt/sources.list.d/ubuntu-arm.sources
+                sed -i 's/^Components:/Architectures: amd64\nComponents:/' /etc/apt/sources.list.d/ubuntu.sources
+              else
+                cp /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu-arm.list
+                sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+                sed -i 's,[a-z]*.ubuntu.com,ports.ubuntu.com,' /etc/apt/sources.list.d/ubuntu-arm.list
+                sed -i 's,/ubuntu/ ,/ubuntu-ports/ ,' /etc/apt/sources.list.d/ubuntu-arm.list
+                sed -i 's/^deb /deb [arch=arm64] /' /etc/apt/sources.list.d/ubuntu-arm.list
+                cat /etc/apt/sources.list  /etc/apt/sources.list.d/ubuntu-arm.list
+              fi
             fi
+
             if [ "$arch" = "arm64" ]; then
               dpkg --add-architecture arm64
               apt-get update
@@ -84,7 +97,7 @@ jobs:
       max-parallel: 1
       matrix:
         os-version: ["buster", "bullseye", "bookworm", "noble", "jammy", "focal"]
-        arch: ["amd64"] # , "arm64"]
+        arch: ["amd64", "arm64"]
     steps:
       - uses: actions/download-artifact@v4
         with:
