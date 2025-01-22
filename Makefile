@@ -20,11 +20,12 @@
 #
 #
 
+PKG_CONFIG = pkg-config
 OBJ     = callbacks.o main.o stats.o
-LIBS    = $(shell pkg-config --libs libcdb)
+LIBS    = $(shell $(PKG_CONFIG) --libs libcdb)
 LIBS   += -lmilter
 LIBS   += -lpthread
-LIBS   += $(shell pkg-config --libs openssl)
+LIBS   += $(shell $(PKG_CONFIG) --libs openssl)
 ifeq ($(origin CC),default)
 CC      = gcc
 endif
