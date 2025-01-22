@@ -20,7 +20,7 @@
 #
 #
 
-PKG_CONFIG = pkg-config
+PKG_CONFIG ?= pkg-config
 OBJ     = callbacks.o main.o stats.o
 LIBS    = $(shell $(PKG_CONFIG) --libs libcdb)
 LIBS   += -lmilter
@@ -45,7 +45,7 @@ strip: signing-milter
 .SILENT: config.h
 config.h:
 	test -f config.h || { \
-	  echo "erstelle neue config.h"; \
+	  echo "create config.h"; \
 	  echo '#ifndef _CONFIG_H_INCLUDED_' > $@  ; \
 	  echo '#define _CONFIG_H_INCLUDED_' >> $@ ; \
 	  echo '#define NDEBUG'              >> $@ ; \
