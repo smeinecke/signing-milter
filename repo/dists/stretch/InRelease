@@ -2,7 +2,7 @@
 Hash: SHA512
 
 Codename: stretch
-Date: Thu, 23 Jan 2025 02:47:48 UTC
+Date: Thu, 23 Jan 2025 02:48:41 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
@@ -29,17 +29,17 @@ SHA256:
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmeRrdQACgkQLfCqaigF
-WCkWchAAs6ZXxw168RVSsAapGmonEJSpYsP8ICkUmIeiMMZ/FC6y2FOxf8TJVPxV
-kNsTsBLl6x+dGSU8WkRwGQP83Zf7X0XI1bM9wx2G7CUw3p2fxOXGGJfyWcdQIUMo
-tnwOOPAQmlKBcYeAskbXk9fHkSd/sC5Qlwo59lYtm/HrGK0puDDX+iqznzaNqob+
-W7wfXq7WLKfCNeO40PwAY0mQTlN8msNyVgEY2KUsuQuxJ8P9eMwsYQsg3PRDZfMZ
-Kunr+ONx5qC936eiNR14WqlQj46/V/qGnXznQIhlEqSCOflD2eNwsDVErTUfJzqm
-WO7ntUjEkIv/xKWe9vfqmk7dzJEnyq872ZNdwljdCjIegAQvrxXcH8L7DHZ89tG9
-FGhGtzD1t3y5TiOdVFkRrp4SUNwJyMIIY6ZrD1rvjqTb7Y81sWErAHWYl8KtF1DW
-JjZCj5w2VVBY+2K2lI7ulJsEJVSDWonxBrbJEnJkoc0eUEKKrrD60NWgsqofmxbe
-0BBVvxKII7EwZTFq1sAPKH8srLdt1G81WC6NTzUYzKJn/vh8SUkusrkrOD7QWfE3
-mYVEKQ3ERt2U0M6+U1H55uUf7ir3BdDw+2q+1CaD15cbVBjVpb9e3iVwHsZHF8g7
-Jfs5f7wEnCmqUCNPz4qSstH+zgWJCYvDAQmHDLkC6Cl2f2hjf0k=
-=PKTF
+iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmeRrgkACgkQLfCqaigF
+WCl+sxAAglKie12OAFOdUA5yHYeSZMMFV29n1w6kmxhlYw6fAydRSqiKnHdmzMsE
+UA9afjKGmSgWBTg8i7Af/QJZh5Ht7k8Znk/0lh2JE3a/0LrQLfOxLg3W2tTUxESI
+TrhulvakYtYn2oAI60vObe0Un0hNacYrl86nGkaeiVHXlbWORJPT29IBL9Xl3F9r
+7hTNf9NapQhxFo/fd9MjfNI3hdxhKtMNFoKgSSfq3DWBoQ80D6tii9rFbg6v4AXs
+KQlCrIYcVHolL34NuSdk+rY8/Lo85WUuVJQt3hbXywjF8+On1ElVaSFnnfAdwAjV
+ZFilrn3AKAiqZ3SluRYz83+dHQckyelwvA1NjYygzAq5rzbUtQeps3aVR4srxTt7
+8YHga6LVFM8PCK09aWrYijnVzDUbecuyfiPsYLVtSpRlBPxwV/zkUA4kd+OHWbxm
+nct630RBkUjxMDEfZa/+kQ+h9NefnvafoBqE/+Djpl/zSvgzx/+nH4tH+DVkYRSU
+jNllYfXhJah0XOzQdYklFJy+KdwTS/u9WZM6JB1AIvfwafcixWvk7QwjSdFpZ2+K
+ctr0oANdUdpgsbzFKaB+7XwEQVI+65u1vGmUOxfhjsrfHF3PL5hQNgpPH7wLnxyc
++hlokzafAkNxZ0ZSIoylf8BIvn8Ky1ev5b9QcXUWvFvYGZKRXzQ=
+=ahUs
 -----END PGP SIGNATURE-----

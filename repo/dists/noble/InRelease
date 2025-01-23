@@ -2,7 +2,7 @@
 Hash: SHA512
 
 Codename: noble
-Date: Thu, 23 Jan 2025 02:47:48 UTC
+Date: Thu, 23 Jan 2025 02:48:41 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
@@ -29,17 +29,17 @@ SHA256:
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmeRrdQACgkQLfCqaigF
-WCm5zg/9GBRiOOuuGxaG3JK76mMNSASpr4bk0EPSvqISws/szHsFzAkddwZ4KcBR
-lh98HKtvwx84Y20iANkPxe3LFtPUBKQpLHbL813OtZf3MuTI9GZ7BhoD3YoguJVC
-kTbC3s9TMn6TBVpz+r0KTxiOPjBbPRhj9GcR3JIYhMvmTVSlGiK9kl5c2EghV9lN
-65cOQPfoQcoYj6q4kLsoG6ZZX74AUhMXHuU5SwE+Uq28p2XXz1K5xk1rftSWYry3
-OZPXYnkCmQNX7aA3MnemYtKOHHqf0FNSbwDwjRl7u2DoYKrl7SGe+Q+EHAK1muF/
-BJ73kX9wrX2YZNbfVQp5e3Xj8fE7mQVZYXO7zIsG5SZjERUf2OcjynF2PaMwA9hk
-FxtrQ/DXbQSUG6iBKBAg3t59ewxkeiIfHp1btkWKWBd7n2W7/MjjzkVpnXd+LQif
-hnF9026Fatgczdtpbbtbzwt9ujxl/Fg8Y6iMIDemkZNr45Dm6VrD2PXuj83jUhOv
-tC3L2OSIVo6xglhStfxRzolYLZeboK/Rr1+wnFpdKVcwYFuLUvaPb2epXqMBeDIB
-MoMzCbowgVBYkvZArLNezowCE/yhkP1Gh2VtD8+Z0KddZ1V3m5wRPoPXlIql4WHy
-xlf0Q/Xmg7macyMaar0bRk+3k3QINeL0hhG6ySMnVAv4kQrdGTU=
-=9Bjw
+iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmeRrgkACgkQLfCqaigF
+WCkUwBAAs6W9Vlw9hS+Iz28zHjEBncrn9Xh+G2A0jldbk8e1gZFhfishBXG6AJ/2
++et1KXn+VUZSqnA40Rk+q60+quci4kNdG93uFu3XVEe4qlkBP4Ei803uv7QSBCtP
+5EJAjcT+W7Sbs+nEXOz8+achSUNROUPqvfr/PfBSALcNWfKA3kOTcNPFM0goNZxY
+PjnlviNQ2m7sm2boNprkaMxizP1zDUDBB+FnhTdZa5k4J9AsLQCGS8XLr7za2ZGr
+s7LlgTrmQETk9yInoXgB7xBIbboA+4VUDFtKt6E8ujQvPZZ1Q2Jvpf1QNKBP6CoY
+GcFok/apviKGuMjk2bW5x6tSuZjVeLjjanXPWLejsEy5lCnwNDJvClS+wpWb9RbL
+zuZhJjF3HiP6NqqJbSJjlEix+XUQlafWLth6kF3uN4VV6ypzbU7iqf0kk20oCuux
+fadsAOmm3pshoJbSCnYY18pHHeOUNvxFLy5zZ3Kk2tF/Wyl3acW6/qWfkhvK5EAx
+e+7835ODJiLG2yZVvNCdFUlULtFpOY4lnRlms0oZnF7cZPKDkVSfnVyzXhkL8MbS
+Toyv59G2QHgVkhyzAWjnRjQLoGdcBwwjGnPrkpQ8N4p9POVT3Y1iot26orV1Rnxr
++vsUEefZmNUewANXegkpOc12t5f6ku6t43iuHosaguW/rGwa7Zk=
+=SsMH
 -----END PGP SIGNATURE-----
