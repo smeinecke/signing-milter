@@ -123,3 +123,4 @@ jobs:
           private_key: ${{ secrets.APT_SIGNING_KEY }}
           public_key: ${{ vars.APT_PUBLIC_KEY }}
           key_passphrase: ""
+          skip_duplicates: true
