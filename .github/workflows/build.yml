@@ -62,7 +62,7 @@ jobs:
             fi
           extra-build-deps: devscripts git dpkg-cross
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
-          buildpackage-opts: --build=binary --no-sign -d
+          buildpackage-opts: --build=binary --no-sign -d -Zgzip
       - name: Upload deb files
         uses: actions/upload-artifact@v4
         with:
