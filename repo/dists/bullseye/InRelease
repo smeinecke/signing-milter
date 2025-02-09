@@ -2,7 +2,7 @@
 Hash: SHA512
 
 Codename: bullseye
-Date: Sun, 09 Feb 2025 12:07:44 UTC
+Date: Sun, 09 Feb 2025 12:16:52 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
@@ -29,17 +29,17 @@ SHA256:
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmeompAACgkQLfCqaigF
-WClZvg/+PW6581bIlawSoTk3u9f8VLEbB+smmJMreNIaSn3MJRnajxNchcwUG9CK
-dZaxD0S1++LVgirgP3kNlAqn+qqkdbgQR3dwfwXi0qb2O9AQQTIQ6uc5c1PrEjtJ
-QCVSGNOi5N05tpJ9t0ng1lykqp58VtB+bF0cJv+83lvSP08BZAnmY7dp8q84Q/Lg
-uIQ9KI89cdepR6/InqVOq+38jJu18ArFOzPcuNHJ7SatYYbfuXI0rB9pEYSmpQrw
-AzJyy2QFY1/AayL6qmM8HyswWpAitVkBWRP9FVp6d/2OM8/Sl0aKyzY3aHZE/seR
-rMt55W+GHVZgv9vhrz7sv+g1QlO1zIDVdbg9l6o63t0LvRw8YGyyp/JMh2onVtIx
-1ilH5uPy/UknfxyxdQk6mNsVZmYXJ4UewIl8/W/FNIRDi2LylLIXJhwkOuLffCj7
-X1GU0kmuesRSu0WfGSrVIM6hTM786UX3Gkz8P46TKon6jCcLJT/2affMZuTxdUJu
-+4gUKK4DsLSstPiCu1oEszbYvqzf7l3oQSFyxNHgZZi8R86jUibwqJ+eQrM+/niI
-vlD4lpvZyL8NUsMcnp0ffhlHpgfda6/OAYLLZoN+/LwYMBKOKidZ2BH1dy8TDDi6
-/DasMkimtZakcwrTY5kQb8g+Vyh+KlETYBr5iXfr1OddXdrssmM=
-=ZCjb
+iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmeonLQACgkQLfCqaigF
+WCluSw//Qffl7UXQgDggzajNotrRERCIlBbD1nBTsphA3nSjrpZzd6BH/48PO+HE
+pl9DqqDtOZluoYIuvEMkgrfn7LBy/rr1Jf6T0BnsBx/eWgPvGFKnT7YK3gRy7TtK
+5Pn+oC1/2GxjJ1giQ1/FfLlvGIRem/IMtoOVl00jRLB8SkNkh1ZsmBeVBmdNiAkb
+NADcZsVSM1OEgnOxvDB5Irl4QQ57U7RVTIDn0+GzBUGabdEGYRWRb9VTlyA0LRsm
+HM2vGpiZMea6CI5ZGdPo6xlYK2WvPgZ2kzv8We94DiRybjRUwCtaEZExnkAhK63K
+lnrnFP5/WCb77IRityIOtZv6eS2ZjhOt5yTiBnMIMKeObACqefHx74bDEMKJO/xG
+iXd5g3/WE4KyIE3UYM4OO6xMhPp8PxmH/NJCespZGKWa5tUoC84CC0223ma+KuTe
+Eknugavx0U5g7XP0oPDlznLOVXsY1Y/aYTzIDyyPzJdZ+uiNfKzrz4WfkHEpcs6w
+Z3vGsIfn/AFsFcA0ONi9VdpAzlZXHzK1S5SSWt3HFRwDI+03fH9yCytOr2YEJLy1
+63H1esl7gRcGv2j3IalAGQQSTmv2cN2oo46yi/iDRpIiGs7z3QamxpG57tqTcH3R
+Udscko4FP+miATVqPzrrf4bMkrep3TRrzbC4NHuQe1s0k71g2hE=
+=HoVq
 -----END PGP SIGNATURE-----
