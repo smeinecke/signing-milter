@@ -1,5 +1,5 @@
 Codename: focal
-Date: Thu, 23 Jan 2025 02:48:41 UTC
+Date: Sun, 09 Feb 2025 12:07:44 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
@@ -7,20 +7,20 @@ MD5Sum:
  7b9ae39663f1fe79b8b9c7c230097d4f 811 main/binary-amd64/Packages
  c41580ece70cd824319bc59ba77a04e9 529 main/binary-amd64/Packages.gz
  53c75bd6fcaa598a1555a27baec99189 74 main/binary-amd64/Release
- d41d8cd98f00b204e9800998ecf8427e 0 main/binary-arm64/Packages
- 7029066c27ac6f5ef18d660d5741979a 20 main/binary-arm64/Packages.gz
+ a4222a8eee1f6b30de54271428c3634f 811 main/binary-arm64/Packages
+ 9a90ff15646f4b26fe483b48647e5f2b 531 main/binary-arm64/Packages.gz
  bb403eb7cb62dd8c4145d4e9e0a818bf 74 main/binary-arm64/Release
 SHA1:
  6d96f78c283ade640fc3053880b5aab998aaecd5 811 main/binary-amd64/Packages
  8e8af331946b1f2a8dee2aa92e2d6d34593ed0ad 529 main/binary-amd64/Packages.gz
  8c9e6bb96cb420c4decf5f08598357158f2ba9a6 74 main/binary-amd64/Release
- da39a3ee5e6b4b0d3255bfef95601890afd80709 0 main/binary-arm64/Packages
- 46c6643f07aa7f6bfe7118de926b86defc5087c4 20 main/binary-arm64/Packages.gz
+ 3908b9498d2ff029cc06bbfc84ac7c643fdd6db3 811 main/binary-arm64/Packages
+ 3e55ae7512ba5d2aeeefe6b84dfa646817f1fc65 531 main/binary-arm64/Packages.gz
  d875f2c30a33891ca530fb3211c81c603a5022ec 74 main/binary-arm64/Release
 SHA256:
  b30da9478d4c0e49f6645c99e831eb9009aa6d1e0492b363a36987dcccc706a5 811 main/binary-amd64/Packages
  da4ef657055d9b907f0b6971c2caf18280dffc83245bf660e26d141270c35d10 529 main/binary-amd64/Packages.gz
  63b7757a5a7a97ae95a930c83335cd6345d1c7eab6f3b83a5648e3794b75b589 74 main/binary-amd64/Release
- e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 0 main/binary-arm64/Packages
- 59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2 20 main/binary-arm64/Packages.gz
+ c15493ab574fae0287a1dad790acb3152e97747f44a0e453d1edd50c3cc5faa5 811 main/binary-arm64/Packages
+ b4eeb7f83258069457fbb2789d573272632c8fd5ae923eeb3ab4340893c7bb83 531 main/binary-arm64/Packages.gz
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
