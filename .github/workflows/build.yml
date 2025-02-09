@@ -93,16 +93,11 @@ jobs:
   add_repo:
     runs-on: ubuntu-latest
     needs: build
-    strategy:
-      max-parallel: 1
-      matrix:
-        os-version: ["buster", "bullseye", "bookworm", "noble", "jammy", "focal"]
-        arch: ["amd64", "arm64"]
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: "packages-${{ matrix.os-version }}-${{ matrix.arch }}"
-      - name: Add ${{ matrix.arch }}/${{ matrix.os-version }} release
+          name: "merged-artifacts"
+      - name: Add releases to repo
         uses: smeinecke/apt-repo-action@master
         with:
           github_token: ${{ github.token }}
@@ -118,8 +113,8 @@ jobs:
             jammy
             focal
           file: |
-            *~${{ matrix.os-version }}*.deb
-          file_target_version: ${{ matrix.os-version }}
+            *.deb
+          version_by_filename: true
           private_key: ${{ secrets.APT_SIGNING_KEY }}
           public_key: ${{ vars.APT_PUBLIC_KEY }}
           key_passphrase: ""
