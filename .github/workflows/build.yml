@@ -92,7 +92,7 @@ jobs:
 
   add_repo:
     runs-on: ubuntu-latest
-    needs: build
+    needs: merge-artefacts
     steps:
       - uses: actions/download-artifact@v4
         with:
