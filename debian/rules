@@ -30,3 +30,5 @@ include /usr/share/cdbs/1/class/makefile.mk
 
 DEB_MAKE_CHECK_TARGET = check
 
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
