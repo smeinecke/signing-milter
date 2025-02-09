@@ -70,6 +70,7 @@ jobs:
           path: ./debian/artifacts/*
 
   merge-artefacts:
+    name: Merge all deb files to single artifact
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -91,6 +92,7 @@ jobs:
           files: ./*.deb
 
   add_repo:
+    name: Add packages to public debian repository
     runs-on: ubuntu-latest
     needs: merge-artefacts
     steps:
