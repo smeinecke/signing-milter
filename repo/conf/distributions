@@ -27,6 +27,13 @@ SignWith: 964E93C09EE45E9046F65B882DF0AA6A28055829
 
 
 Description: smeinecke/signing-milter
+Codename: trixie
+Architectures: amd64 arm64
+Components: main
+SignWith: 964E93C09EE45E9046F65B882DF0AA6A28055829
+
+
+Description: smeinecke/signing-milter
 Codename: noble
 Architectures: amd64 arm64
 Components: main
