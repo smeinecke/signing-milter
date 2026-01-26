@@ -36,7 +36,16 @@ jobs:
           setup-hook: |
             os_version="${{ matrix.os-version }}"
             flavor=${os_version%%:*}
+            version=${os_version##*:}
             arch="${{ matrix.arch }}"
+
+            # Update sources for archived Debian buster
+            if [ "$flavor" = "debian" ] && [ "$version" = "buster" ]; then
+              sed -i 's|http://deb.debian.org/debian|http://archive.debian.org/debian|g' /etc/apt/sources.list
+              sed -i 's|http://deb.debian.org/debian-security|http://archive.debian.org/debian-security|g' /etc/apt/sources.list
+              sed -i 's|http://deb.debian.org/debian-updates|http://archive.debian.org/debian|g' /etc/apt/sources.list
+            fi
+
             if [ "$flavor" = "ubuntu" ] && [ "$arch" = "arm64" ]; then
               # check for deb822 source format
               if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
