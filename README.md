@@ -9,6 +9,7 @@ This repository replaces the `daemontools` service manager used in the original 
  * buster
  * bullseye
  * bookworm
+ * trixie
  * focal
  * jammy
  * noble
