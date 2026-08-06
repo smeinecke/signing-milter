@@ -23,10 +23,10 @@
 #include "validate_pem_permissions.h"
 
 /*
- * prüfen, ob die Datei existiert und ob es eine Datei ist
- * Datei darf nicht zugreifbar für "other" sein
- * Datei darf nicht schreib- oder ausführbar für die aktuelle UID sein
- * Datei muss lesbar für die aktuelle UID sein
+ * check whether the file exists and whether it is a file
+ * the file must not be accessible for "other"
+ * the file must not be writable or executable for the current UID
+ * the file must be readable for the current UID
  */
 
 int validate_pem_permissions(const char* pemfilename) {

@@ -23,7 +23,7 @@
 #include "load_pem.h"
 
 /*
- * laed eine X509 Zertifikat aus der PEM-Datei "file"
+ * load an X509 certificate from the PEM file "file"
  */
 X509* load_pem_cert(const char* file) {
 

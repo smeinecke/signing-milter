@@ -28,9 +28,9 @@ int headerchain2signingbuffer(SMFICTX* ctx, CTXDATA* ctxdata) {
 
     if ((ctxdata->mailflags & MF_TYPE_MIME) == 0) {
 
-        /* einfachster Fall:
-         * plain text, Body ist implizit 7bit Ascii
-         * die Headerchain ist leer, da es keine MIME-Header gibt
+        /* simplest case:
+         * plain text, body is implicitly 7-bit ASCII
+         * the header chain is empty because there are no MIME headers
          */
         ctxdata->pkcs7flags |= PKCS7_TEXT;
     }
@@ -39,15 +39,15 @@ int headerchain2signingbuffer(SMFICTX* ctx, CTXDATA* ctxdata) {
         ctxdata->pkcs7flags |= PKCS7_BINARY;
 
         /*
-         * irgendwiegeartete MIME-Mail
-         * es MUSS Header geben
+         * some kind of MIME mail
+         * there MUST be headers
          */
         assert(ctxdata->headerchain != NULL);
 
         /*
-         * wenn es MIME-Header gibt, diese in den inBIO schreiben
-         * damit diese mitsigniert werden.
-         * ( den MIME-Version: 1.0 jedoch nicht in den Body kopieren )
+         * if there are MIME headers, write them into inBIO
+         * so that they are co-signed.
+         * ( however, do not copy the MIME-Version: 1.0 into the body )
          */
         n = ctxdata->headerchain;
         while (n != NULL) {
@@ -58,7 +58,7 @@ int headerchain2signingbuffer(SMFICTX* ctx, CTXDATA* ctxdata) {
             n = n->next;
         }
         /*
-         * und eine weitere Leerzeile als Trenner zw. MIME-Header und Body
+         * and another empty line as separator between MIME header and body
          */
         append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), "\r\n", 2);
     }

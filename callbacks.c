@@ -51,8 +51,8 @@ struct smfiDesc callbacks = {
  *       argv[0] is guaranteed to be the sender address.
  *       Later arguments are the ESMTP arguments.
  *
- * Wird möglicherweise mehrfach innerhalb einer Verbindung
- * aufgerufen. Könnte also sein. das ctxdata schon befüllt ist.
+ * May be called multiple times within one connection.
+ * Could be that ctxdata is already filled.
  *
  */
 sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
@@ -76,16 +76,16 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
     logmsg(LOG_DEBUG, "MAIL FROM: '%s' (via %s)", argv[0], daemon_name);
 
     /*
-     * Testen, ob die Tabelle aktuell ist.
-     * TODO: automaischer reload
+     * Test whether the table is up to date.
+     * TODO: automatic reload
      */
     warn_if_dict_changed(&dict_signingtable);
 
     pemfilename = dict_lookup(&dict_signingtable, argv[0]);
     if (pemfilename == NULL || *pemfilename == '\0') {
         /*
-         * Absender nicht in der Signingtable gefunden.
-         *  keine weitere Aktion noetig.
+         * Sender not found in the signing table.
+         * No further action needed.
          */
         if (opt_signerfromheader) {
             logmsg(LOG_DEBUG, "no cert for envsender, will look for '%s'", HEADERNAME_SIGNER);
@@ -96,10 +96,10 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
     }
 
     /*
-     * Private Datenstruktur vorbereiten
+     * Prepare the private data structure
      */
     if ((ctxdata = (CTXDATA*) smfi_getpriv(ctx)) != NULL) {
-        /* eigentlich LOG_INFO / unbedeutend, aber ich möchte das mal im Log sehen */
+        /* actually LOG_INFO / not important, but I want to see this in the log once */
         logmsg(LOG_WARNING, "callback_envfrom: REUSED CONNECTION !!!!");
         ctxdata_cleanup(ctxdata);
     } else {
@@ -147,14 +147,14 @@ sfsistat callback_envrcpt(SMFICTX* ctx, char** argv) {
     dict_lookup(&dict_modetable, argv[0]);
     if (dict_modetable.result != NULL && *dict_modetable.result != '\0') {
         /*
-         * Empfaenger in der modetable gefunden.
-         * Ergebnis gilt fuer *alle* Empfaenger.
+         * Recipient found in the mode table.
+         * The result applies to *all* recipients.
          */
         logmsg(LOG_DEBUG, "callback_envrcpt: %s found in modetable: value='%s'", argv[0], dict_modetable.result);
 
         if (strstr(dict_modetable.result, "skip") != NULL) {
             logmsg(LOG_INFO, "modetable hit: skip signing for %s", argv[0]);
-            /* TODO: muss hier noch Speicher freigegeben werden? */
+            /* TODO: does memory need to be freed here? */
             return SMFIS_ACCEPT;
         }
         if (strstr(dict_modetable.result, "opaque") != NULL) {
@@ -209,17 +209,17 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
     }
 
     /*
-     * RFC 2045 definiert
-     * Content-Type, Content-Transfer-Encoding, Content-ID und Content-Description
-     * Abschnitt 9 legt fest, dass alle Erweiterungen mit content- beginnen werden
+     * RFC 2045 defines
+     * Content-Type, Content-Transfer-Encoding, Content-ID and Content-Description
+     * Section 9 states that all extensions will begin with content-
      */
     if (strncasecmp(headerf, "content-", 8) == 0) {
 
         /*
-         * schon signierte Nachrichten brauchen nicht weiter
-         * bearbeitet werden
-         * TODO: die Erkennung, ob eine Mail schon signiert ist,
-         *       ist sicher noch nocht perfekt
+         * Already signed messages do not need to be
+         * processed further
+         * TODO: the detection of whether a mail is already signed
+         *       is certainly not yet perfect
          */
         if (is_already_signed(headerf, headerv)) {
             logmsg(LOG_NOTICE, "mail seemes already signed.");
@@ -248,16 +248,16 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         logmsg(LOG_DEBUG, "callback_header: signerfrom_header: %s", headerv);
 
         /*
-         * Testen, ob die Tabelle aktuell ist.
-         * TODO: automatischer reload
+         * Test whether the table is up to date.
+         * TODO: automatic reload
          */
         warn_if_dict_changed(&dict_signingtable);
 
         pemfilename = dict_lookup(&dict_signingtable, headerv);
         if (pemfilename == NULL || *pemfilename == '\0') {
             /*
-             * Absender nicht in der Signingtable gefunden.
-             *  keine weitere Aktion noetig.
+             * Sender not found in the signing table.
+             * No further action needed.
              */
             logmsg(LOG_INFO, "no signingdata for %s", headerv);
             return SMFIS_ACCEPT;
@@ -269,7 +269,7 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         }
 
         /*
-         * Headerfeld muss in callback_eom geloescht werden
+         * Header field must be deleted in callback_eom
          */
         ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
     }
@@ -297,9 +297,9 @@ sfsistat callback_eoh(SMFICTX* ctx) {
     }
 
     /*
-     * Nach dem DATA steht die QueueID fest. Da dieser Milter kein
-     * callback beim DATA-Kommano implementiert, ist dies der erste
-     * callback, wo die QueueID abrufbar ist.
+     * After DATA, the QueueID is fixed. Since this milter does not
+     * implement a callback at the DATA command, this is the first
+     * callback where the QueueID can be retrieved.
      */
     if (!ctxdata->queueid) {
         if ((ctxdata->queueid = smfi_getsymval(ctx, "{i}")) == NULL) {
@@ -314,10 +314,10 @@ sfsistat callback_eoh(SMFICTX* ctx) {
     }
 
     /*
-     * RFC 2045: MIME-Version Header ist Pflicht, wenn Content-* Header benutzt werden.
-     * Einige MUAs (Apple Mail, Outlook) schicken aber gelegentlich Content-* Header
-     * ohne MIME-Version. Statt die Mail abzuweisen, behandeln wir sie als MIME und
-     * markieren, dass callback_eom den erzeugten MIME-Version Header uebernehmen muss.
+     * RFC 2045: MIME-Version header is mandatory when Content-* headers are used.
+     * Some MUAs (Apple Mail, Outlook) occasionally send Content-* headers
+     * without MIME-Version. Instead of rejecting the mail, we treat it as MIME and
+     * mark that callback_eom must adopt the generated MIME-Version header.
      */
     if ( (ctxdata->headerchain != NULL) && ((ctxdata->mailflags & MF_TYPE_MIME) == 0) ) {
 
@@ -387,12 +387,12 @@ sfsistat callback_body(SMFICTX* ctx, unsigned char* bodyp, size_t len) {
     }
 
     /*
-     * wenn die Mail eine Multipart-Mime-Mail ist,
-     * beginnt sie mit einer Preambel ( RFC 2046, 5.1.1 )
-     * diese Preambel endet mit der ersten Boundary ( ^-- ) und wird nicht in die Signatur einbezogen.
+     * If the mail is a multipart MIME mail,
+     * it begins with a preamble (RFC 2046, 5.1.1).
+     * This preamble ends with the first boundary (^--) and is not included in the signature.
      */
     if ((ctxdata->first_bodychunk_seen == 0) && (ctxdata->mailflags & MF_TYPE_MULTIPART)) {
-        /* erster Chunk */
+        /* first chunk */
         ctxdata->first_bodychunk_seen = 1;
         for(;;) {
             while (*start != '-' && length > 0) {
@@ -437,8 +437,8 @@ sfsistat callback_eom(SMFICTX* ctx) {
     }
 
     /*
-     *  "echo | /usr/sbin/sendmail rcpt" erzeugt Nachrichten mit 0 Byte body
-     *  aber BIO_new_mem_buf mag 0 Byte gar nicht. Also spendieren wir einen Zeilenumbruch
+     *  "echo | /usr/sbin/sendmail rcpt" creates messages with 0-byte body,
+     *  but BIO_new_mem_buf doesn't like 0 bytes at all. So we add a line break.
      */
     if (0 == ctxdata->data2sign_len) {
         if ((append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), "\r\n", 2)) != 0) {
@@ -490,15 +490,15 @@ sfsistat callback_eom(SMFICTX* ctx) {
     gettimeofday(&start_time, NULL);
 
     /*
-     * Header und Body sind nun komplett im Puffer data2sign.
-     * Aus diesem Puffer wird nun ein BIO gemacht
+     * Header and body are now complete in the data2sign buffer.
+     * A BIO is now created from this buffer
      */
     if ((ctxdata->inbio = BIO_new_mem_buf(ctxdata->data2sign, ctxdata->data2sign_len)) == NULL) {
         logmsg(LOG_ERR, "%s: error: callback_eom: creating inBIO failed", ctxdata->queueid);
         return SMFIS_TEMPFAIL;
     }
 
-    /* global oder bei Bedarf (modetable) Daten aufheben */
+    /* keep data globally or on demand (modetable) */
     if ((keepdir = opt_keepdir) == NULL) {
         keepdir = ctxdata->keepdir;
     }
@@ -534,7 +534,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
     }
 
     /*
-     * Content-Type Header nun wirklich löschen
+     * Now really delete the Content-Type header
      */
     if (delete_marked_headers(ctx, ctxdata) != 0) {
         logmsg(LOG_ERR, "%s: error: callback_eom: delete_marked_headers failed", ctxdata->queueid);
@@ -542,7 +542,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
     }
 
     /*
-     * wenn vorhanden: HEADERNAME_SIGNER loeschen
+     * if present: delete HEADERNAME_SIGNER
      */
     if (ctxdata->mailflags & MF_SIGNER_FROM_HEADER) {
         if (smfi_chgheader(ctx, HEADERNAME_SIGNER, 0, NULL) != MI_SUCCESS) {
@@ -555,7 +555,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
     }
 
     /*
-     * aus outbio die neuen MIME-Header rausziehen
+     * extract the new MIME headers from outbio
      */
     for(;;) {
         char* headerline;
@@ -572,7 +572,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
             return SMFIS_TEMPFAIL;
         }
 
-        /* leere Zeile: header ist komplett */
+        /* empty line: header is complete */
         if ((strcmp(headerline, "\r\n") == 0) || (strcmp(headerline, "\n") == 0)) {
             if (headerline)
                 free(headerline);
@@ -582,12 +582,11 @@ sfsistat callback_eom(SMFICTX* ctx) {
         logmsg(LOG_DEBUG, "%s: Header aus PKCS7: %s", ctxdata->queueid, headerline);
 
         /*
-         * wenn eine 7bit ASCII Mail signiert wurde, enthielt die keinen MIME-Header
-         * dann: diesen hier uebernehmen
+         * If a 7-bit ASCII mail was signed, it did not contain a MIME header,
+         * then: adopt it here.
          *
-         * Wenn callback_eoh einen fehlenden MIME-Version Header ergaenzt hat,
-         * muessen wir den erzeugten MIME-Version Header aus dem PKCS7 Output
-         * uebernehmen.
+         * If callback_eoh has added a missing MIME-Version header,
+         * we must adopt the generated MIME-Version header from the PKCS7 output.
          */
         if ( (strncasecmp(headerline, "mime-version", 12) == 0) &&
              ((ctxdata->mailflags & MF_TYPE_MIME) != 0) &&
@@ -599,8 +598,8 @@ sfsistat callback_eom(SMFICTX* ctx) {
         }
 
         /*
-         * separieren der Zeile in 2 Teile. Dazu wird ':' durch '\0' ersetzt
-         * und im headerv führende Leerzeichen übersprungen
+         * separate the line into 2 parts. ':' is replaced by '\0'
+         * and leading spaces in headerv are skipped
          */
         if ((headerv = separate_header(headerline, &headerf)) == NULL) {
             logmsg(LOG_ERR, "%s: error: callback_eom: separate_header failed", ctxdata->queueid);
@@ -619,7 +618,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
         logmsg(LOG_DEBUG, "%s: separierter, umgebrochener Header: %s:%s", ctxdata->queueid, headerf, headerv);
 
         /*
-         * nun die Header neu setzen
+         * now set the headers again
          */
         if ((smfi_addheader(ctx, headerf, headerv)) != MI_SUCCESS) {
             logmsg(LOG_ERR, "%s: error: callback_eom: smfi_addheader %s:%s failed", ctxdata->queueid, headerf, headerv);
@@ -636,7 +635,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
             free(headerv);
     }
 
-    /* dann body replace */
+    /* then replace body */
     BIO_get_mem_ptr(ctxdata->outbio, &outmem);
     if (outmem == NULL) {
         logmsg(LOG_ERR, "%s: error: callback_eom: BIO_get_mem_ptr failed", ctxdata->queueid);
@@ -651,13 +650,13 @@ sfsistat callback_eom(SMFICTX* ctx) {
     /* BUF_MEM_free(outmem); */
 
     /*
-     * etwas angeben ...
+     * provide some information ...
      */
     logmsg(LOG_NOTICE, "%s: %ssigned with %s%s", ctxdata->queueid, ctxdata->mailflags & MF_SIGNMODE_OPAQUE ? "opaque" : "clear", ctxdata->pemfilename, ctxdata->chain != NULL ? " (+chain)" : " (no chain)");
     logmsg(LOG_INFO, "%s: signing %ld byte took %d.%d sec", ctxdata->queueid, ctxdata->data2sign_len, duration.tv_sec, duration.tv_usec);
 
     /*
-     * abschliessend einen X-Header in die Mail stempeln
+     * finally stamp an X-Header into the mail
      */
     if (opt_addxheader) {
         char  xhdr[MAXHEADERLEN + 1];
@@ -674,7 +673,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
         }
     }
 
-    /* Statistik */
+    /* statistics */
     inc_stats(&duration);
 
     return SMFIS_CONTINUE;

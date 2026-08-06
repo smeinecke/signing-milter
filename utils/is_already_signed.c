@@ -22,8 +22,8 @@
 
 #include "is_already_signed.h"
 
-/* TODO: diese Funktion geht davon aus, dass in einer Mail die
- *       Header immer aus kleinbuchstaben bestehen
+/* TODO: this function assumes that the headers in a mail
+ *       always consist of lowercase letters
  */
 int is_already_signed(char* headerf, char* headerv) {
 

@@ -23,22 +23,22 @@
 #include "break_after_semicolon.h"
 
 /*
- * Ersetzt in einem String das ";" gefolgt von einem beliebigen Zeichen
- * in der Phase vor dem Signieren durch "; \r \n \t"
- * und in der Phase nach dem Signieren durch "; \n \t"
- * Annahme : nach einem ; kommt immer ein Leerzeichen. Dies ist jedoch durch einen Aufruf von hdrdup sichergestellt.
+ * replaces the ";" followed by any character in a string
+ * in the phase before signing with "; \r \n \t"
+ * and in the phase after signing with "; \n \t"
+ * assumption: after a ; there is always a space. This is ensured by a call to hdrdup.
  *
- * Argument: - ein mit malloc allokierter Speicherbereich mit einem nullterminierten String
- *           - PHASE_PRE_SIGN (3) oder PHASE_POST_SIGN (2)
- * Rückgabe: - im Fehlerfall:
+ * argument: - a memory area allocated with malloc containing a null-terminated string
+ *           - PHASE_PRE_SIGN (3) or PHASE_POST_SIGN (2)
+ * return:   - in case of error:
  *             NULL
- *           - wenn string keine ; enthielt:
- *             der urspüngliche String
- *           - wenn der String < 70 Zeichen ist:
- *             der urspüngliche String
- *           - wenn string mindestens ein ; enthielt:
- *             ein neuer, mit malloc allokierter Speicher.
- *             der als Argument übergebene Speicher ist mit free bereinigt.
+ *           - if the string contains no ;:
+ *             the original string
+ *           - if the string is < 70 characters:
+ *             the original string
+ *           - if the string contains at least one ;:
+ *             a new memory area allocated with malloc.
+ *             the memory passed as argument is freed with free.
  */
 char* break_after_semicolon(char* string, int phase) {
 
@@ -52,11 +52,11 @@ char* break_after_semicolon(char* string, int phase) {
     }
 
     if (!num_semicolon) {
-        /* keine semikolons in string enthalten */
+        /* no semicolons in string */
         return (string);
     }
 
-    /* pro Semokolon 2 oder 3 zusätzliches Byte + ein Leerzeichen (oder Luft?) */
+    /* per semicolon 2 or 3 additional bytes + one space (or empty?) */
     if ((new_string = malloc(strlen(string) + (num_semicolon*phase) + 1)) == NULL) {
         logmsg(LOG_ERR, "FATAL: break_after_semicolon: malloc failed");
         return(NULL);
@@ -64,7 +64,7 @@ char* break_after_semicolon(char* string, int phase) {
 
     p_old = string;
     p_new = new_string;
-    while (*p_old) { /* bis \0 */
+    while (*p_old) { /* until \0 */
         *p_new = *p_old;
 
         if (*p_old != ';') {
@@ -79,10 +79,10 @@ char* break_after_semicolon(char* string, int phase) {
             p_new++;
             *p_new = ' ';
             p_new++;
-            p_old++; /* Zeichen nach ; */
+            p_old++; /* character after ; */
             if (*p_old != ' ')
                 logmsg(LOG_ERR, "break_after_semicolon: no SPACE after ; in ->%s<-", string);
-            p_old++; /* hoffentlich das <SPACE> */
+            p_old++; /* hopefully the <SPACE> */
         }
     }
     *p_new = '\0';

@@ -26,9 +26,9 @@ int delete_marked_headers(SMFICTX* ctx, CTXDATA* ctxdata) {
 
     if ((ctxdata->mailflags & MF_TYPE_MIME) == 0) {
 
-        /* einfachster Fall:
-         * plain text, Body ist implizit 7bit Ascii
-         * die Headerchain ist leer, da es keine MIME-Header gibt
+        /* simplest case:
+         * plain text, body is implicitly 7-bit ASCII
+         * the header chain is empty because there are no MIME headers
          */
         assert(ctxdata->headerchain == NULL);
     }
@@ -37,7 +37,7 @@ int delete_marked_headers(SMFICTX* ctx, CTXDATA* ctxdata) {
         NODE* n;
 
         /*
-         * irgendwelche MIME-Mail es MUSS Header geben
+         * any MIME mail: there MUST be headers
          */
         assert(ctxdata->headerchain != NULL);
 

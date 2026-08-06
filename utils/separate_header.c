@@ -37,10 +37,10 @@ char* separate_header(const char* line, char** headerf) {
         *headerf = (char*) line;
     }
 
-    /* die trennende \0 überspringen */
+    /* skip the terminating \0 */
     p++;
 
-    /* fuehrende Leerzeichen im headerv überspringen */
+    /* skip leading spaces in headerv */
     while (*p == ' ')
       p++;
 
@@ -50,7 +50,7 @@ char* separate_header(const char* line, char** headerf) {
     }
 
     q = headerv;
-    /* abschliessendes \r\n oder \n abschneiden */
+    /* cut off trailing \r\n or \n */
     while (*p != '\r' && *p != '\n') {
         *q = *p;
         p++;

@@ -25,11 +25,11 @@
 void dump_pkcs7flags(int flags) {
 
 #ifndef NDEBUG
-    /* 14 Flags, das längste 20 Zeichen -> Puffer 20x20 Byte */
+    /* 14 flags, the longest is 20 characters -> buffer 20x20 bytes */
     char* buf;
 
     /*
-     * Rüchsprung, falls LOGLEVEL nicht auf LOG_DEBUG steht
+     * return if LOGLEVEL is not set to LOG_DEBUG
      */
     if (opt_loglevel < LOG_DEBUG)
         return;

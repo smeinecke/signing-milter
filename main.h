@@ -40,7 +40,7 @@
 #include "stats.h"
 #include "utils/utils.h"
 
-/* parameter fuer smfi_opensocket */
+/* parameter for smfi_opensocket */
 #define REMOVE_EXISTING_SOCKETS 1
 
 #ifdef DMALLOC

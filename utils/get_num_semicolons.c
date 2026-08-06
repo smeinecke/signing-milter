@@ -23,13 +23,13 @@
 #include "get_num_semicolons.h"
 
 /*
- * Anzahl der Semikolons in einem String zählen
+ * count the number of semicolons in a string
  *
- * Argument: Zeiger auf ein nullterminierter String
- * Rückgabe: Anzahl der Semikolons
- *           -1, wenn das Argument ein NULL-Zeiger ist
- * BUGS    : Integerüberlauf, wenn in Sting mehr als sizeof(int)/2 - 1
- *           Semikolons vorkommen
+ * argument: pointer to a null-terminated string
+ * return:   number of semicolons
+ *           -1 if the argument is a NULL pointer
+ * bugs    : integer overflow if more than sizeof(int)/2 - 1
+ *           semicolons occur in the string
  */
 int get_num_semicolons(char* string) {
 
@@ -42,7 +42,7 @@ int get_num_semicolons(char* string) {
     }
 
     p = string;
-    while (*p) { /* bis \0 */
+    while (*p) { /* until \0 */
         if (*p == ';')
             num_semicolon++;
         p++;

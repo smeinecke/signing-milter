@@ -23,7 +23,7 @@
 #include "is_multipart_mime.h"
 
 /*
- * testet, ob ein Content-Type Header auf multipart lautet.
+ * tests whether a Content-Type header says multipart.
  */
 int is_multipart_mime(char* headerf, char* headerv) {
 

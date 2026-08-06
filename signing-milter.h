@@ -55,7 +55,7 @@
 #define MAXHEADERLEN 4096
 
 /* ======= CDB ======================= */
-/* übliche Länge des Speichers der für dict.buffer allokiert wird */
+/* usual size of memory allocated for dict.buffer */
 #define DICT_BUFFER_LEN 512
 
 typedef struct DICT {
@@ -74,8 +74,8 @@ typedef struct DICT {
 
 /* ======= NODES ======================= */
 /*
- * - Zeiger auf den naechsten Knoten
- * - Type des Knoten
+ * - pointer to the next node
+ * - type of the node
  */
 struct node_t {
     struct node_t* next;
@@ -106,7 +106,7 @@ struct ctxdata {
 };
 #define CTXDATA struct ctxdata
 
-/* Werte fuer ctxdata.mailflags */
+/* values for ctxdata.mailflags */
 #define MF_TYPE_MIME                   (1<<0)
 #define MF_TYPE_MULTIPART              (1<<1)
 #define MF_SIGNMODE_OPAQUE             (1<<2)
@@ -115,9 +115,8 @@ struct ctxdata {
 #define MF_MIME_VERSION_DEFAULT        (1<<5)
 
 /*
- * globale Variablen
- * koennen durch Kommandozeienparameter
- * veraendert werden
+ * global variables
+ * can be changed by command-line parameters
  */
 extern char* opt_clientgroup;
 extern int   opt_loglevel;

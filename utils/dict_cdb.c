@@ -53,17 +53,17 @@ void dict_open(const char* path, DICT* dict) {
     /*
      * allocte some memory
      */
-    /* temp. puffer */
+    /* temp. buffer */
     if ((dict->buffer = malloc(DICT_BUFFER_LEN)) == NULL) {
         logmsg(LOG_ERR, "dict_open: malloc: %m", strerror(errno));
         exit(EX_SOFTWARE);
     }
-    /* Ergebnispuffer */
+    /* result buffer */
     if ((dict->result = malloc(DICT_BUFFER_LEN)) == NULL) {
         logmsg(LOG_ERR, "dict_open: malloc: %m", strerror(errno));
         exit(EX_SOFTWARE);
     }
-    /* wird dynamisch vergroessert, als Groesse merken */
+    /* grows dynamically, remember its size */
     dict->result_len = DICT_BUFFER_LEN;
 
     /*
@@ -111,7 +111,7 @@ const char* dict_lookup(DICT* dict, const char* key) {
     int             status = 0;
 
     /*
-     * definierten rueckgabewert setzen
+     * set the defined return value
      */
     *(dict->result) = '\0';
 
@@ -121,35 +121,35 @@ const char* dict_lookup(DICT* dict, const char* key) {
         exit(EX_SOFTWARE);
     }
 
-    /* non_smtpd_milter: adressen haben *keine* <>
-     * smtpd_milter:     adressen *haben* <>
-     * Annahme: wenn das erste Zeichen ein < ist,
-     *          wird das letzte Zeichen ein > sein.
-     * Dazu wird keylen zweimal dekrementiert.
+    /* non_smtpd_milter: addresses have *no* <>
+     * smtpd_milter:     addresses *have* <>
+     * assumption: if the first character is a <,
+     *             the last character will be a >.
+     * To do this, keylen is decremented twice.
      */
     p = (char*) key;
     if (*p == '<') {
         p++;
         keylen-=2;
     }
-    /* leerer Absender ist nun leider leer */
+    /* empty sender is, unfortunately, empty now */
 
     strncpy(dict->buffer, p, keylen);
-    /* nun fehlt noch die abschliessende \0 */
+    /* the terminating \0 is still missing */
     p = dict->buffer + keylen;
     *p = '\0';
 
     if (strlen(dict->buffer) == 0) {
         /*
-         * leerer Absender:
-         * mit <> in der cdb-Datei anfragen
+         * empty sender:
+         * query with <> in the cdb file
          */
         strcpy(dict->buffer, "<>");
         keylen = 2;
     }
 
     /*
-     * Grossbuchstaben umwandeln
+     * convert uppercase letters to lowercase
      */
     key = lowercase(dict->buffer);
 
@@ -181,7 +181,7 @@ const char* dict_lookup(DICT* dict, const char* key) {
         vlen = cdb_datalen(&dict->cdb);
         if (dict->result_len < vlen) {
             dict->result = realloc(dict->result, vlen + 1);
-            /* TODO: realloc kann fehlschlagen; Fehler abfangen */
+            /* TODO: realloc may fail; catch the error */
             dict->result_len = vlen;
         }
         if (cdb_read(&dict->cdb, dict->result, vlen, cdb_datapos(&dict->cdb)) < 0) {

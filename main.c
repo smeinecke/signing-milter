@@ -22,7 +22,7 @@
 
 #include "main.h"
 
-/* Standardwerte setzen */
+/* set default values */
 char* opt_clientgroup  = NULL;
 int   opt_loglevel     = LOG_NOTICE;
 int   opt_logdest      = LOG_DEST_SYSLOG;
@@ -36,7 +36,7 @@ char* opt_user         = "signing-milter";
 int   opt_addxheader   = 0;
 int   opt_signerfromheader = 0;
 
-/* globale Variablen */
+/* global variables */
 struct DICT dict_signingtable = {
     "signingtable",      /* name       */
     DICT_FLAG_TRY0NULL,  /* flags      */
@@ -72,8 +72,8 @@ int main(int argc, char** argv) {
 
 
     /*
-     * compilerwarnung: "client_gid may be used uninitialized"
-     * sowas will man ja nun wirklich nicht ...
+     * compiler warning: "client_gid may be used uninitialized"
+     * no one wants that ...
      */
     uid = gid = client_gid = root_gid = 0;
 
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
               client_gid = gr->gr_gid;
             }
             break;
-        case 'd': /* Loglevel */
+        case 'd': /* log level */
             opt_loglevel = (int) strtoul(optarg, &p, 10);
             if (p != NULL && *p != '\0') {
                 printf("debug-level is not valid integer: %s\n", optarg);
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
                 printf("directory to keep data: %s is not a directory", opt_keepdir);
                 exit(EX_DATAERR);
             }
-            /* Zugriffsrechte werden spaeter geprueft, wenn zur richtigen uid gewechselt wurde */
+            /* access permissions will be checked later, after switching to the correct uid */
             break;
         case '?': /* help */
         case 'h':
@@ -133,13 +133,13 @@ int main(int argc, char** argv) {
         case 'l': /* switch log destination from SYSLOG (default) to STDOUT */
             opt_logdest = LOG_DEST_STDOUT;
             break;
-        case 'm': /* Signingtable cdbfilename */
+        case 'm': /* signing table CDB filename */
             opt_signingtable = optarg;
             break;
-        case 'n': /* Modetable cdbfilename */
+        case 'n': /* mode table CDB filename */
             opt_modetable = optarg;
             break;
-        case 's': /* Miltersocket */
+        case 's': /* milter socket */
             opt_miltersocket = optarg;
             break;
         case 't': /* Timeout */
@@ -203,8 +203,8 @@ int main(int argc, char** argv) {
     }
 
     /*
-     * User- und Gruppennamen stehen nun fest. Testen, ob es diese gibt
-     * und uid / gid ermitteln
+     * user and group names are now fixed. test whether they exist
+     * and determine uid / gid
      */
     if ((pw = getpwnam(opt_user)) == NULL) {
         logmsg(LOG_ERR, "unknown user: getpwnam(%s) failed", opt_user);
@@ -217,28 +217,28 @@ int main(int argc, char** argv) {
     }
     gid = gr->gr_gid;
 
-    /* wenn nicht als Parameter angegeben, gehört ein Unix-Socket erstmal der gleichen Gruppe */
+    /* if not specified as a parameter, a Unix socket initially belongs to the same group */
     if (opt_clientgroup == NULL)
         client_gid = gid;
 
-    /* :relax erlaubt jedem Client, den Socket zu nutzen; dennoch muss chown() fuer
-     * die Gruppe des Prozesses funktionieren, auch wenn signing-milter nicht als root
-     * laeuft (z.B. in lokalen Tests). */
+    /* :relax allows every client to use the socket; nevertheless chown() must
+     * work for the process group, even if signing-milter is not running as root
+     * (e.g. in local tests). */
     if (opt_clientgroup != NULL && strcmp(opt_clientgroup, ":relax") == 0)
         client_gid = gid;
 
-    /* wenn inet in optarg gefunden wird *und* das auch noch direkt am Anfang
-     * dann ist's kein lokaler socket */
+    /* if 'inet' is found in optarg *and* right at the beginning,
+     * then it is not a local socket */
     if (((p = strstr(opt_miltersocket, "inet")) != NULL) && opt_miltersocket == p)
         localsocket = 0;
 
     if (localsocket == 1) {
-        /* den Socket oeffnen */
+        /* open the socket */
         if (smfi_opensocket(REMOVE_EXISTING_SOCKETS) != MI_SUCCESS) {
             logmsg(LOG_ERR, "could not open milter socket %s", opt_miltersocket);
             exit(EX_SOFTWARE);
         }
-        /* testen, ob's den Socket nun gibt */
+        /* test whether the socket now exists */
         p = opt_miltersocket + strlen("local:");
         if (stat(p, &st) < 0) {
             p = opt_miltersocket + strlen("unix:");
@@ -248,20 +248,20 @@ int main(int argc, char** argv) {
             }
         }
 
-        /* gid der Gruppe root */
+        /* gid of the root group */
         if ((gr = getgrnam("root")) == NULL) {
             logmsg(LOG_ERR, "unknown rootgroup: getgrnam(root) failed");
             exit(EX_SOFTWARE);
         }
         root_gid = gr->gr_gid;
 
-        /* clientgroup muss != root und != opt_group sein */
+        /* clientgroup must be != root and != opt_group */
         if (((client_gid == gid) || (client_gid == root_gid)) && (opt_clientgroup != NULL) && strcmp(opt_clientgroup, ":relax") != 0) {
             logmsg(LOG_ERR, "clientgroup %s must be neither %s nor %s", opt_clientgroup, "root", opt_group);
             exit(EX_DATAERR);
         }
 
-        /* nun die Rechte setzen */
+        /* now set the permissions */
         if (chown(p, uid, client_gid) != 0) {
             logmsg(LOG_ERR, "chown(%s, %i, %i) failed: %m", p, uid, client_gid, strerror(errno));
             exit(EX_SOFTWARE);
@@ -282,7 +282,7 @@ int main(int argc, char** argv) {
         logmsg(LOG_INFO, "changed socket %s to owner/group: %i/%i, mode: %s", opt_miltersocket, uid, client_gid, socket_mode_str);
     }
 
-    /* gid/uid setzen */
+    /* set gid/uid */
     if (setgid(gid) != 0) {
         logmsg(LOG_ERR, "setgid(%i) failed: %s", gr->gr_gid, strerror(errno));
         exit(EX_SOFTWARE);
@@ -292,7 +292,7 @@ int main(int argc, char** argv) {
         exit(EX_SOFTWARE);
     }
 
-    /* aktuelle uid/gid pruefen und loggen */
+    /* check and log the current uid/gid */
     uid = getuid();
     gid = getgid();
     if (uid == 0 || gid == 0) {
@@ -333,10 +333,10 @@ int main(int argc, char** argv) {
     SSL_load_error_strings();
     ERR_load_crypto_strings();
 
-    /* Statistik initialisieren */
+    /* initialize statistics */
     init_stats();
 
-    /* Signal-Handler fuer SIGALRM */
+    /* signal handler for SIGALRM */
     signal(SIGALRM, sig_handler);
 
     /* Run milter */

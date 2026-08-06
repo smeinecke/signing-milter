@@ -55,9 +55,9 @@ NODE* appendnode(NODE** head, NODE* node) {
 }
 
 /*
- * loescht einen beliebigen Knoten
- * wenn der zu loeschende Knoten einen Verweis auf einen weiteren Knoten hat,
- * wird dieser Verweis zurueckgegeben
+ * deletes an arbitrary node
+ * if the node to be deleted has a reference to another node,
+ * that reference is returned
  */
 NODE* deletenode(NODE* node) {
 

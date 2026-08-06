@@ -22,15 +22,15 @@
 
 #include "hdrdup.h"
 
-/* Idee: postfix:src/global/lex_822.h */
+/* idea: postfix:src/global/lex_822.h */
 #define IS_CR_LF(ch)            (ch == '\r' || ch == '\n')
 #define IS_NOT_SPACE_TAB(ch)    (ch != ' '  && ch != '\t')
 
 /*
- * hdrdup analog strdup
- * string ist headerf oder headerv
+ * hdrdup, analogous to strdup
+ * string is headerf or headerv
  *
- * Ersetzt \n \r\n und darauffolgende SPACES oder TABS durch genau ein SPACE
+ * replaces \n, \r\n and following SPACES or TABS with exactly one SPACE
  */
 char* hdrdup(const char* string) {
 
@@ -44,7 +44,7 @@ char* hdrdup(const char* string) {
 
     assert(string != NULL);
 
-    string_len = strlen(string) + 1; /* fuer die abschliessende \0 */
+    string_len = strlen(string) + 1; /* for the terminating \0 */
     if ((dup = malloc(string_len)) == NULL)
         return NULL;
 
@@ -53,15 +53,15 @@ char* hdrdup(const char* string) {
         string++;
 
         /*
-         * Zeilenumbruch ueberspringen und merken.
+         * skip and remember the line break.
          */
         if (IS_CR_LF(c)) {
             skip = 1;
             continue;
         }
-        /* erst wenn nach einem Zeilenumbruch kein SPACE oder TAB kommt,
-         * ist der Zeilenumbruch beendet
-         * -> also ein Leerzeichen einfuegen
+        /* only when no SPACE or TAB follows a line break,
+         * the line break is finished
+         * -> so insert a space
          */
         if (skip && IS_NOT_SPACE_TAB(c)) {
             *p = ' ';
@@ -75,9 +75,9 @@ char* hdrdup(const char* string) {
         *p = c;
         p++;
     }
-    *p = '\0'; /* String abschliessen */
+    *p = '\0'; /* terminate string */
 
-    dup_len = strlen(dup) + 1; /* fuer die abschliessende \0 */
+    dup_len = strlen(dup) + 1; /* for the terminating \0 */
     if ((skip_len = string_len - dup_len) > (size_t) 0) {
         logmsg(LOG_INFO, "hdrdup: string_len/%u != dup_len/%u, val=%s", (unsigned int) string_len, (unsigned int) dup_len, dup);
         if ((p = realloc(dup, dup_len)) == NULL)
