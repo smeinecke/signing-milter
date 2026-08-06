@@ -7,6 +7,9 @@
 /debian/signing-milter
 /debian/*.debhelper.log
 /debian/*.debhelper
+/debian/debhelper-build-stamp
+/debian/files
+/debian/signing-milter.substvars
 *.o
 *.a
 /signing-milter

@@ -16,7 +16,7 @@ License: GPL-2 with OpenSSL exception
  permission to link the code of portions of this program with the
  OpenSSL library and distribute linked combinations.
 
-Files: utils/lowercase.c utils/dict_cdb.c
+Files: src/utils/lowercase.c src/utils/dict_cdb.c
 Copyright: Wietse Venema
 License: IPL-1.0
  THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS IBM

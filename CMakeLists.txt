@@ -101,43 +101,8 @@ if(ENABLE_DMALLOC)
 endif()
 
 # ----------------------------------------------------------------------
-# Source files
+# Source files and executable are defined in src/CMakeLists.txt
 # ----------------------------------------------------------------------
-set(MAIN_SOURCES
-    callbacks.c
-    main.c
-    stats.c
-)
-
-set(CTXDATA_SOURCES
-    ctxdata/cleanup.c
-    ctxdata/create.c
-    ctxdata/free.c
-    ctxdata/setup.c
-)
-
-set(UTILS_SOURCES
-    utils/append2buffer.c
-    utils/bio2file.c
-    utils/break_after_semicolon.c
-    utils/delete_marked_headers.c
-    utils/dict_cdb.c
-    utils/dump_mailflags.c
-    utils/dump_pkcs7flags.c
-    utils/get_num_semicolons.c
-    utils/hdrdup.c
-    utils/headerchain2signingbuffer.c
-    utils/is_already_signed.c
-    utils/is_multipart_mime.c
-    utils/linkedlist.c
-    utils/load_pem.c
-    utils/logmsg.c
-    utils/lowercase.c
-    utils/node.c
-    utils/separate_header.c
-    utils/usage.c
-    utils/validate_pem_permissions.c
-)
 
 # ----------------------------------------------------------------------
 # config.h
@@ -160,39 +125,7 @@ configure_file(
 # ----------------------------------------------------------------------
 # Executable
 # ----------------------------------------------------------------------
-add_executable(signing-milter
-    ${MAIN_SOURCES}
-    ${CTXDATA_SOURCES}
-    ${UTILS_SOURCES}
-)
-
-target_include_directories(signing-milter PRIVATE
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/ctxdata
-    ${CMAKE_CURRENT_SOURCE_DIR}/utils
-    ${LIBCDB_INCLUDE_DIRS}
-    ${OPENSSL_INCLUDE_DIRS}
-    ${LIBMILTER_INCLUDE_DIR}
-)
-
-target_compile_options(signing-milter PRIVATE
-    ${LIBCDB_CFLAGS_OTHER}
-    ${OPENSSL_CFLAGS_OTHER}
-)
-
-if(ENABLE_DMALLOC)
-    target_compile_definitions(signing-milter PRIVATE DMALLOC)
-    target_include_directories(signing-milter PRIVATE ${DMALLOC_INCLUDE_DIR})
-    target_link_libraries(signing-milter PRIVATE ${DMALLOC_LIBRARY})
-endif()
-
-target_link_libraries(signing-milter PRIVATE
-    ${LIBCDB_LIBRARIES}
-    ${OPENSSL_LIBRARIES}
-    ${LIBMILTER_LIBRARY}
-    Threads::Threads
-)
+add_subdirectory(src)
 
 # ----------------------------------------------------------------------
 # Unit tests (cmocka)
@@ -210,7 +143,7 @@ endif()
 # Custom check target
 # ----------------------------------------------------------------------
 add_custom_target(check
-    COMMAND sh -c "cd ${CMAKE_CURRENT_SOURCE_DIR} && egrep -r 'strcpy|strcat|strtok|sprintf' *.c utils/*.c ctxdata/*.c && echo 'unsafe function used' || true"
+    COMMAND sh -c "cd ${CMAKE_CURRENT_SOURCE_DIR} && egrep -r 'strcpy|strcat|strtok|sprintf' src/*.c src/utils/*.c src/ctxdata/*.c && echo 'unsafe function used' || true"
     COMMENT "Checking for unsafe C functions"
     VERBATIM
 )
@@ -233,7 +166,7 @@ set(SYSTEMD_UNIT_DIR "lib/systemd/system")
 
 # Binary and man page
 install(TARGETS signing-milter DESTINATION ${CMAKE_INSTALL_SBINDIR})
-install(FILES signing-milter.8 DESTINATION ${CMAKE_INSTALL_MANDIR}/man8)
+install(FILES docs/signing-milter.8 DESTINATION ${CMAKE_INSTALL_MANDIR}/man8)
 
 # Default config file
 install(FILES debian/signing-milter.default

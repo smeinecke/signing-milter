@@ -19,7 +19,7 @@ This repository replaces the `daemontools` service manager used in the original 
 
 #### Automatically via script
 ```bash
-wget -O- https://smeinecke.github.io/signing-milter/add-repository.sh | bash
+wget -O- https://smeinecke.github.io/signing-milter/scripts/add-repository.sh | bash
 apt-get install signing-milter
 ```
 
