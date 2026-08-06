@@ -268,8 +268,12 @@ int main(int argc, char** argv) {
         exit(EX_SOFTWARE);
     }
     if (setgroups(0, NULL) != 0) {
-        logmsg(LOG_ERR, "setgroups(0, NULL) failed: %s", strerror(errno));
-        exit(EX_SOFTWARE);
+        if (errno == EPERM) {
+            logmsg(LOG_INFO, "setgroups(0, NULL) not permitted, continuing");
+        } else {
+            logmsg(LOG_ERR, "setgroups(0, NULL) failed: %s", strerror(errno));
+            exit(EX_SOFTWARE);
+        }
     }
     if (setuid(uid) != 0) {
         logmsg(LOG_ERR, "setuid(%i) failed: %s", pw->pw_uid, strerror(errno));
