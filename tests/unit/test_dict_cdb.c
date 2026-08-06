@@ -126,10 +126,60 @@ static void test_dict_reload(void** state) {
     unlink(path);
 }
 
+static void test_lookup_short_and_malformed(void** state) {
+    (void) state;
+    char path[] = "/tmp/signing-milter-test-cdb-3-XXXXXX";
+    int fd = mkstemp(path);
+
+    assert_true(fd >= 0);
+
+    struct cdb_make cdbm;
+    assert_int_equal(cdb_make_start(&cdbm, fd), 0);
+    assert_int_equal(cdb_make_add(&cdbm, "a", 1, "1", 1), 0);
+    assert_int_equal(cdb_make_add(&cdbm, "<>", 2, "empty", 5), 0);
+    assert_int_equal(cdb_make_finish(&cdbm), 0);
+    close(fd);
+
+    DICT dict;
+    memset(&dict, 0, sizeof(dict));
+    dict.name = "test";
+    dict.flags = DICT_FLAG_TRY0NULL;
+
+    dict_open(path, &dict);
+
+    /* well-formed bracketed address */
+    const char* result = dict_lookup(&dict, "<a>");
+    assert_string_equal(result, "1");
+
+    /* empty sender */
+    result = dict_lookup(&dict, "<>");
+    assert_string_equal(result, "empty");
+
+    /* too short or malformed: must not underflow */
+    result = dict_lookup(&dict, "<");
+    assert_string_equal(result, "");
+
+    result = dict_lookup(&dict, "<a");
+    assert_string_equal(result, "");
+
+    result = dict_lookup(&dict, "<abc");
+    assert_string_equal(result, "");
+
+    result = dict_lookup(&dict, "abc>");
+    assert_string_equal(result, "");
+
+    result = dict_lookup(&dict, "<unknown@example.com>");
+    assert_string_equal(result, "");
+
+    dict_close(&dict);
+    unlink(path);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_open_lookup_close),
         cmocka_unit_test(test_lookup_lowercase),
+        cmocka_unit_test(test_lookup_short_and_malformed),
         cmocka_unit_test(test_dict_reload),
     };
     return cmocka_run_group_tests_name("dict_cdb", tests, NULL, NULL);

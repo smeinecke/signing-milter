@@ -8,6 +8,7 @@ void dict_open(const char* path, DICT* dict) {
 
     struct stat st;
     size_t      len;
+    size_t      path_len;
 
     if ((dict->stat_fd = open(path, O_RDONLY)) < 0) {
         logmsg(LOG_ERR, "open database %s: %m", path, strerror(errno));
@@ -52,14 +53,22 @@ void dict_open(const char* path, DICT* dict) {
      * Warn if the source file is newer than the indexed file, except when
      * the source file changed only seconds ago.
      */
-    len = strlen(path) - 4;
+    path_len = strlen(path);
+    if (path_len >= 4) {
+        len = path_len - 4;
+    } else {
+        len = 0;
+    }
     if (len + 1 > DICT_BUFFER_LEN) {
         logmsg(LOG_ERR, "dict_open: buffer to small: %m", strerror(errno));
         exit(EX_SOFTWARE);
     }
-    strncpy(dict->buffer, path, len);
+    if (len > 0) {
+        strncpy(dict->buffer, path, len);
+    }
+    dict->buffer[len] = '\0';
 
-    if (stat(dict->buffer, &st) == 0
+    if (len > 0 && stat(dict->buffer, &st) == 0
         && st.st_mtime > dict->mtime
         && st.st_mtime < time((time_t *) 0) - 100)
         logmsg(LOG_WARNING, "dict_open: database %s is older than source file %s", path, dict->buffer);
@@ -128,6 +137,7 @@ const char* dict_lookup(DICT* dict, const char* key) {
 
     size_t          keylen;
     unsigned        vlen;
+    const char*     src = key;
     char*           p;
     char*           new_result = NULL;
     int             status = 0;
@@ -151,14 +161,13 @@ const char* dict_lookup(DICT* dict, const char* key) {
      *             the last character will be a >.
      * To do this, keylen is decremented twice.
      */
-    p = (char*) key;
-    if (*p == '<') {
-        p++;
-        keylen-=2;
+    if (*src == '<' && keylen >= 2 && src[keylen - 1] == '>') {
+        src++;
+        keylen -= 2;
     }
     /* empty sender is, unfortunately, empty now */
 
-    strncpy(dict->buffer, p, keylen);
+    strncpy(dict->buffer, src, keylen);
     /* the terminating \0 is still missing */
     p = dict->buffer + keylen;
     *p = '\0';
