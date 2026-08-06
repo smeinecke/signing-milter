@@ -1,26 +1,27 @@
 #include "separate_header.h"
 
-char* separate_header(const char* line, char** headerf) {
+char* separate_header(char* line, char** headerf) {
 
     char* p = NULL;
     char* q = NULL;
     char* headerv = NULL;
+    size_t i;
 
     if (line == NULL || *line == '\0') {
-        return (0);
+        return NULL;
     }
 
-    if ((p = strchr(line, ':')) != NULL) {
-        *p = '\0';
-        *headerf = (char*) line;
+    if ((p = strchr(line, ':')) == NULL) {
+        return NULL;
     }
 
-    /* skip the terminating \0 */
+    *p = '\0';
+    *headerf = line;
+
+    /* skip the colon and leading whitespace in headerv */
     p++;
-
-    /* skip leading spaces in headerv */
-    while (*p == ' ')
-      p++;
+    while (*p == ' ' || *p == '\t')
+        p++;
 
     if ((headerv = malloc(MAXHEADERLEN)) == NULL) {
         logmsg(LOG_ERR, "separate_header: failed to allocate %i byte (MAXHEADERLEN)", MAXHEADERLEN);
@@ -28,14 +29,13 @@ char* separate_header(const char* line, char** headerf) {
     }
 
     q = headerv;
-    /* cut off trailing \r\n or \n */
-    while (*p != '\r' && *p != '\n') {
-        *q = *p;
-        p++;
-        q++;
+    /* copy value, cutting off trailing \r\n, \n, or end of string, bounded by buffer size */
+    i = 0;
+    while (*p != '\0' && *p != '\r' && *p != '\n' && i < MAXHEADERLEN - 1) {
+        *q++ = *p++;
+        i++;
     }
-
     *q = '\0';
 
-    return (headerv);
+    return headerv;
 }

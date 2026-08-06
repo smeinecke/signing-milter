@@ -46,6 +46,16 @@ static void test_already_signed_mixed_case(void** state) {
         "MULTIPART/SIGNED; PROTOCOL=\"APPLICATION/PKCS7-SIGNATURE\""), 1);
 }
 
+static void test_embedded_substring(void** state) {
+    (void) state;
+    assert_int_equal(is_already_signed("content-type",
+        "text/plain; comment=\"multipart/signed; protocol=application/pkcs7-signature\""), 0);
+    assert_int_equal(is_already_signed("content-type",
+        "multipart/signed; boundary=\"application/pkcs7-signature\""), 0);
+    assert_int_equal(is_already_signed("content-type",
+        "multipart/mixed; boundary=\"multipart/signed; protocol=application/pkcs7-signature\""), 0);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_already_signed_pkcs7),
@@ -54,6 +64,7 @@ int main(void) {
         cmocka_unit_test(test_not_content_type),
         cmocka_unit_test(test_missing_pkcs7_signature),
         cmocka_unit_test(test_already_signed_mixed_case),
+        cmocka_unit_test(test_embedded_substring),
     };
     return cmocka_run_group_tests_name("is_already_signed", tests, NULL, NULL);
 }

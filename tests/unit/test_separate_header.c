@@ -50,9 +50,47 @@ static void test_lf_only(void** state) {
 
 static void test_empty_line(void** state) {
     (void) state;
+    char empty[] = "";
     char* headerf = NULL;
     assert_ptr_equal(separate_header(NULL, &headerf), NULL);
-    assert_ptr_equal(separate_header("", &headerf), NULL);
+    assert_ptr_equal(separate_header(empty, &headerf), NULL);
+}
+
+static void test_no_colon(void** state) {
+    (void) state;
+    char line[] = "No colon here";
+    char* headerf = NULL;
+    assert_ptr_equal(separate_header(line, &headerf), NULL);
+}
+
+static void test_only_colon(void** state) {
+    (void) state;
+    char line[] = "X:";
+    char* headerf = NULL;
+    char* headerv = separate_header(line, &headerf);
+
+    assert_non_null(headerv);
+    assert_string_equal(headerf, "X");
+    assert_string_equal(headerv, "");
+    free(headerv);
+}
+
+static void test_overlong_no_terminator(void** state) {
+    (void) state;
+    char line[MAXHEADERLEN + 32];
+    memset(line, 'A', sizeof(line));
+    line[0] = 'X';
+    line[1] = ':';
+    line[sizeof(line) - 1] = '\0';
+
+    char* headerf = NULL;
+    char* headerv = separate_header(line, &headerf);
+
+    assert_non_null(headerv);
+    assert_string_equal(headerf, "X");
+    assert_int_equal(strlen(headerv), MAXHEADERLEN - 1);
+    assert_int_equal(headerv[0], 'A');
+    free(headerv);
 }
 
 int main(void) {
@@ -61,6 +99,9 @@ int main(void) {
         cmocka_unit_test(test_with_leading_space),
         cmocka_unit_test(test_lf_only),
         cmocka_unit_test(test_empty_line),
+        cmocka_unit_test(test_no_colon),
+        cmocka_unit_test(test_only_colon),
+        cmocka_unit_test(test_overlong_no_terminator),
     };
     return cmocka_run_group_tests_name("separate_header", tests, NULL, NULL);
 }

@@ -35,6 +35,12 @@ static void test_signed_is_not_multipart(void** state) {
     assert_int_equal(is_multipart_mime("content-type", "multipart/signed; protocol=\"application/pkcs7-signature\""), 1);
 }
 
+static void test_embedded_substring(void** state) {
+    (void) state;
+    assert_int_equal(is_multipart_mime("content-type", "text/plain; comment=\"multipart/mixed\""), 0);
+    assert_int_equal(is_multipart_mime("content-type", "multipart/mixed; boundary=\"multipart/foobar\""), 1);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_multipart_mixed),
@@ -42,6 +48,7 @@ int main(void) {
         cmocka_unit_test(test_not_content_type),
         cmocka_unit_test(test_not_multipart),
         cmocka_unit_test(test_signed_is_not_multipart),
+        cmocka_unit_test(test_embedded_substring),
     };
     return cmocka_run_group_tests_name("is_multipart_mime", tests, NULL, NULL);
 }

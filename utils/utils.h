@@ -26,8 +26,8 @@ extern void dump_pkcs7flags(int flags);
 extern int get_num_semicolons(char* string);
 extern char* hdrdup(const char* string);
 extern int headerchain2signingbuffer(SMFICTX* ctx, CTXDATA* ctxdata);
-extern int is_already_signed(char* headerf, char* headerv);
-extern int is_multipart_mime(char* headerf, char* headerv);
+extern int is_already_signed(const char* headerf, const char* headerv);
+extern int is_multipart_mime(const char* headerf, const char* headerv);
 
 extern NODE* get_last(NODE* node);
 extern NODE* appendnode(NODE** head, NODE* node);
@@ -44,7 +44,7 @@ extern char *lowercase(char *);
 extern NODE* newnode(char* headerf, char* headerv, int phase);
 extern void freenode(NODE* node);
 
-extern char* separate_header(const char* line, char** headerf);
+extern char* separate_header(char* line, char** headerf);
 
 extern void usage(void);
 extern void version(void);
