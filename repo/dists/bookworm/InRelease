@@ -2,7 +2,7 @@
 Hash: SHA512
 
 Codename: bookworm
-Date: Mon, 26 Jan 2026 11:04:17 UTC
+Date: Thu, 06 Aug 2026 12:45:28 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
@@ -29,17 +29,17 @@ SHA256:
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAml3SjEACgkQLfCqaigF
-WClfgBAAl2PX8ErtB+r0heQGdyY2pFGh6EH+8SG1mOk1ryCPMKhKuXlCd8JreaK+
-1mP6zOtMnECi65d7qrFrws+pjVJj5SDoavHi4WORyeD1tQhqbLaWYCTp83ws4pwm
-66mvsQ5klv9YNYwwkJxDthKtURcONc4ghbcWbQP7lYWYQFsb9q1Tsr3Zbg5uB6yk
-zYdmfVSZtwzYqARtldVytlQqA+rq/lPY0CL2MT5GETigWvSwQrmbaDfHDXnX10Nw
-svKWA4Oztqk4mckcUPsMlFhuMX06Eyi/gfzyGm5Ln1ch1E8BSMnQKMxycoKQjzmL
-kXd0D8xKhtJoNzoVIYWqVnELKBAKvKHuovroJFTMAiaJtx0FPfWJ2GsJx1drtit/
-qr3YU9SwzFBaC0QS2ijSah3ZV7KIAUyJiv5DXRN8Sap0ovPFlGSx8LFRnFF/Xmdm
-KHGEQo+mmzzIoUtTN/E/OyB0QwHAf+aFOeWpuUmYa8zL4CPznKwksVhb888VnDrU
-e8cyejQNor6Rf3/j7jzlI+BER9mgKfmBcFE/RH+yFpYuqAZn6+xHPSP2ARycPvJs
-+3bFZQ7kB6YOhbkLNoNzTPfejtAQhuft/zGz4tsmDkIxf2SrddnCuwKOgPNu4IK4
-AUb1Kmcex81E+XRfw1yU9uoSbMpQSZP+Hpc34KZ08us+Tm50KLI=
-=7+vj
+iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmp0gegACgkQLfCqaigF
+WCks7g//dSOUqITQrlsNf4t8UWcy3265N/+lGpjZMO4TbPw/kY0jLyxfL4/T4T9u
+vO9XLdbo9YUn77/g6TSHVq82Eau0ecioFmpPW/xge8kxuFuHjtZJK+M4K2goVdC2
+AEcHhlxp4UiWCJwdBaPmJlHWkh2B2xEfRfczzNVEYjinVzo1kpCJtI4gutI3MwFj
+L32cWz0KQHdX0pjtArMnvwUECrNO9s7MUk9vFlgCrLF4ODkA/vaDvYlPGTeggstR
+twP1N0Su34Mr85xgHDN9eo3tnd0kQj2CkGpi9lpRWuYywKgvkhHNy+DmmItyi8Ht
+2O9Lxw2xWuk32odpYMeOc47zoubo96+SHPAAP/EbVvwimReTKPD5GsIw7cDjsA2a
+96/S9c2ERd7INtsa/NNIDdcRVUwj2zO9j5cAumNO/EExYM+mEjKKlozV6apKtIOq
+F907Ej7himDE1JTbXsKemfzeyOl7mSdoTXUwN+xdOsLJ6Soat/qqPff7WSafSAkX
+ILlg4UwSbSCjJ4wupbma2haIJRnumbFbcDk6OpBc2OmGUrNhbxPYDJx/HmG9AVl4
+o0JE4fq1RoXh7R5f2PnmZ1/d8xu7Mr3RnuTrgNULJBlZcPh8tldMS1/ydoVtgO27
+2vhVT8aKXFx1GzDIgMNYpFWXvmFBSihocYXQg28fUSavo+lDCOU=
+=2CrU
 -----END PGP SIGNATURE-----
