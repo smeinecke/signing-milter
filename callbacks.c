@@ -313,13 +313,17 @@ sfsistat callback_eoh(SMFICTX* ctx) {
        return SMFIS_CONTINUE;
     }
 
-    /* RFC 2045: MIME-Version Header ist Pflicht, wenn Content-* Header benutzt werden */
+    /*
+     * RFC 2045: MIME-Version Header ist Pflicht, wenn Content-* Header benutzt werden.
+     * Einige MUAs (Apple Mail, Outlook) schicken aber gelegentlich Content-* Header
+     * ohne MIME-Version. Statt die Mail abzuweisen, behandeln wir sie als MIME und
+     * markieren, dass callback_eom den erzeugten MIME-Version Header uebernehmen muss.
+     */
     if ( (ctxdata->headerchain != NULL) && ((ctxdata->mailflags & MF_TYPE_MIME) == 0) ) {
 
-        char reply[] = "invalid Content: no 'MIME-Version' header but 'Content-*' header found. That violates RFC 2045";
-        logmsg(LOG_ERR, "%s: callback_eoh: %s", ctxdata->queueid, reply);
-        smfi_setreply(ctx, "550", "5.6.0", reply);
-        return SMFIS_REJECT;
+        logmsg(LOG_WARNING, "%s: callback_eoh: no 'MIME-Version' header but 'Content-*' header found. Treating as MIME and adding default MIME-Version", ctxdata->queueid);
+
+        ctxdata->mailflags |= MF_TYPE_MIME | MF_MIME_VERSION_DEFAULT;
     }
 
     /*
@@ -580,9 +584,14 @@ sfsistat callback_eom(SMFICTX* ctx) {
         /*
          * wenn eine 7bit ASCII Mail signiert wurde, enthielt die keinen MIME-Header
          * dann: diesen hier uebernehmen
+         *
+         * Wenn callback_eoh einen fehlenden MIME-Version Header ergaenzt hat,
+         * muessen wir den erzeugten MIME-Version Header aus dem PKCS7 Output
+         * uebernehmen.
          */
         if ( (strncasecmp(headerline, "mime-version", 12) == 0) &&
-             ((ctxdata->mailflags & MF_TYPE_MIME) != 0) ) {
+             ((ctxdata->mailflags & MF_TYPE_MIME) != 0) &&
+             ((ctxdata->mailflags & MF_MIME_VERSION_DEFAULT) == 0) ) {
             logmsg(LOG_DEBUG, "%s: skip mime-version header", ctxdata->queueid);
             if (headerline)
                 free(headerline);

@@ -53,6 +53,9 @@ void dump_mailflags(int flags) {
     if (flags & MF_SIGNER_FROM_HEADER) {
 	strcat(buf, "MF_SIGNER_FROM_HEADER | ");
     }
+    if (flags & MF_MIME_VERSION_DEFAULT) {
+	strcat(buf, "MF_MIME_VERSION_DEFAULT | ");
+    }
     strcat(buf, "0");
 
     logmsg(LOG_DEBUG, "dump_mailflags: %s", buf);
