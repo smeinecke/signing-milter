@@ -1,0 +1,4 @@
+#ifndef _CONFIG_H_INCLUDED_
+#define _CONFIG_H_INCLUDED_
+#cmakedefine NDEBUG
+#endif

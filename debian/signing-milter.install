@@ -1,3 +1,6 @@
-signing-milter usr/sbin
-
+usr/sbin/signing-milter usr/sbin
+usr/share/signing-milter/run_signing-milter usr/share/signing-milter
+etc/default/signing-milter etc/default
+etc/cron.daily/signing-milter etc/cron.daily
+etc/cron.hourly/signing-milter etc/cron.hourly
 debian/etc/signing-milter etc/

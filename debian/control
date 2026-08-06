@@ -2,8 +2,8 @@ Source: signing-milter
 Section: mail
 Priority: optional
 Maintainer: Andreas Schulze <debian@andreasschulze.de>
-Build-Depends: cdbs
- , debhelper (>= 10)
+Build-Depends: debhelper (>= 10)
+ , cmake
  , lintian
  , shellcheck
  , pkg-config

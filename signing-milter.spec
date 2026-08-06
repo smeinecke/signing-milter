@@ -31,6 +31,7 @@ Url:		https://signing-milter.org
 Source:		https://signing-milter.org/signing-milter_%{debian_version}.tar.xz
 BuildRoot:	%{_tmppath}/%{name}
 BuildRequires:	pkg-config, xz, pwdutils
+BuildRequires:	cmake
 BuildRequires:	sendmail-devel >= 8.14, tinycdb-devel >= 0.77, openssl-devel
 Requires:	cron
 
@@ -43,10 +44,12 @@ mail transiting a milter-aware MTA.
 %setup -n %{name}
 
 %build
-make
+cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix}
+make %{?_smp_mflags}
 
 %install
-make DESTDIR=%{buildroot} install
+rm -rf %{buildroot}
+make install DESTDIR=%{buildroot}
 
 %pre
 getent group signing-milter 2>/dev/null || {

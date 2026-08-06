@@ -1,5 +1,20 @@
 Build Requirements
 
+cmake >= 3.10
+pkg-config
 libmilter 8.14
 tinycdb
 openssl
+
+Optional: dmalloc (enabled with -DENABLE_DMALLOC=ON)
+
+Quick Build
+
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    make
+
+For a Debian package:
+
+    dpkg-buildpackage -us -uc -b

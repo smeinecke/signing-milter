@@ -30,6 +30,28 @@ echo "deb [signed-by=/usr/share/keyrings/smeinecke.github.io-signing-milter.key]
 apt-get update && apt-get install signing-milter
 ```
 
+## Build from source
+
+```bash
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make
+```
+
+Optional dmalloc support:
+
+```bash
+cmake -DENABLE_DMALLOC=ON -DCMAKE_BUILD_TYPE=Release ..
+make
+```
+
+To build a Debian package:
+
+```bash
+dpkg-buildpackage -us -uc -b
+```
+
 ## Basic postfix configuration
 In default configuration the postfix daemon is chrooted to the spool folder located in `/var/spool/postfix/`. To use the socket feature of signing-milter the socket + permissions has to be configured in the `/etc/default/signing-milter` file:
 ```ini
@@ -56,11 +78,11 @@ systemctl reload postfix
 ```
 
 ## Configure certificates
-All certificates are configured in the `/etc/signing-milter/sigingtable` file.
+All certificates are configured in the `/etc/signing-milter/signingtable` file.
 
 Just add the email address + path of the pem file and use
 ```bash
-make
+cd /etc/signing-milter && make
 ```
 to update the `cdb` database and trigger reloading signing-milter.
 
