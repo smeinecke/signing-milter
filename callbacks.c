@@ -37,11 +37,11 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
 
     const char*    pemfilename = NULL;
     CTXDATA*       ctxdata;
-    char*          daemon_name;
+    const char*    daemon_name;
     int            i;
 
-
-    if ((daemon_name = smfi_getsymval(ctx, "{daemon_name}")) == NULL) {
+    char sym_daemon_name[] = "{daemon_name}";
+    if ((daemon_name = smfi_getsymval(ctx, sym_daemon_name)) == NULL) {
         daemon_name = "smfi_getsymval(daemon_name) failed";
         logmsg(LOG_WARNING, "warning: callback_envfrom smfi_getsymval(daemon_name) failed, continue");
     }
@@ -171,7 +171,8 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
     }
 
     if (!ctxdata->queueid) {
-        if ((ctxdata->queueid = smfi_getsymval(ctx, "{i}")) == NULL) {
+        char sym_i[] = "{i}";
+        if ((ctxdata->queueid = smfi_getsymval(ctx, sym_i)) == NULL) {
             ctxdata->queueid = "unknown";
             logmsg(LOG_WARNING, "%s: warning: callback_header: smfi_getsymval(queueid) failed", ctxdata->queueid);
         }
@@ -271,7 +272,8 @@ sfsistat callback_eoh(SMFICTX* ctx) {
      * callback where the QueueID can be retrieved.
      */
     if (!ctxdata->queueid) {
-        if ((ctxdata->queueid = smfi_getsymval(ctx, "{i}")) == NULL) {
+        char sym_i[] = "{i}";
+        if ((ctxdata->queueid = smfi_getsymval(ctx, sym_i)) == NULL) {
             ctxdata->queueid = "unknown";
             logmsg(LOG_WARNING, "%s: warning: callback_eoh: smfi_getsymval(queueid) failed", ctxdata->queueid);
         }
@@ -302,8 +304,8 @@ sfsistat callback_eoh(SMFICTX* ctx) {
     if ( (ctxdata->headerchain == NULL) && ((ctxdata->mailflags & MF_TYPE_MIME) != 0) ) {
 
         NODE* n;
-        char* headerf = "Content-Type";
-        char* headerv = "text/plain; charset=\"us-ascii\"";
+        const char* headerf = "Content-Type";
+        const char* headerv = "text/plain; charset=\"us-ascii\"";
 
         logmsg(LOG_WARNING, "%s: malformed Content: 'MIME-Version' header but no 'Content-*' header found. Please read RFC 2045, Section 5.2. Adding '%s: %s'" , ctxdata->queueid, headerf, headerv);
 
@@ -628,10 +630,11 @@ sfsistat callback_eom(SMFICTX* ctx) {
      */
     if (opt_addxheader) {
         char  xhdr[MAXHEADERLEN + 1];
-        char* hostname;
+        const char* hostname;
 
         bzero(xhdr, sizeof(xhdr));
-        if ((hostname = smfi_getsymval(ctx, "{j}")) == NULL) {
+        char sym_j[] = "{j}";
+        if ((hostname = smfi_getsymval(ctx, sym_j)) == NULL) {
             logmsg(LOG_WARNING, "%s: warning: callback_eom: smfi_getsymval(hostname) failed, cannot addxheader, continue", ctxdata->queueid);
         } else {
             snprintf(xhdr, MAXHEADERLEN, "%s %s on %s", STR_PROGNAME, STR_PROGVERSION, hostname);

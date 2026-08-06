@@ -1,6 +1,6 @@
 #include "node.h"
 
-NODE* newnode(char* headerf, char* headerv, int phase) {
+NODE* newnode(const char* headerf, const char* headerv, int phase) {
 
     NODE* n;
 

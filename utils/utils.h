@@ -41,7 +41,7 @@ extern STACK_OF(X509)* load_pem_chain(int fd);
 extern void logmsg(int priority, const char *fmt, ...);
 extern char *lowercase(char *);
 
-extern NODE* newnode(char* headerf, char* headerv, int phase);
+extern NODE* newnode(const char* headerf, const char* headerv, int phase);
 extern void freenode(NODE* node);
 
 extern char* separate_header(char* line, char** headerf);

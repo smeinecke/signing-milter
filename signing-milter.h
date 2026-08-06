@@ -5,7 +5,7 @@
 #include <openssl/x509.h>
 #include "config.h"
 
-#define STR_PROGNAME    "signing-milter"
+extern char STR_PROGNAME[];
 #ifdef NDEBUG
 #define STR_PROGVERSION "20210822"
 #else
@@ -15,19 +15,19 @@
 /*
  * Name of the header added by -x cmdline switch
  */
-#define HEADERNAME_XHEADER "X-Signed-by"
+extern char HEADERNAME_XHEADER[];
 
 /*
  * Name of the header used as signeraddress
  * if opt_signerfromheader is enabled
  */
-#define HEADERNAME_SIGNER "X-Signer"
+extern char HEADERNAME_SIGNER[];
 
 /*
  * Name of the header used to signal the
  * desire to not sign a particular message
  */
-#define HEADERNAME_SKIP_SIGNING "X-Skip-Signing"
+extern char HEADERNAME_SKIP_SIGNING[];
 
 /* buffer for caching one header */
 #define MAXHEADERLEN 4096
@@ -79,9 +79,9 @@ struct ctxdata {
     int             mailflags;
     char*           buffer;
     size_t          buffer_len;
-    char*           queueid;
+    const char*     queueid;
     int             first_bodychunk_seen;
-    char*           keepdir;
+    const char*     keepdir;
 };
 #define CTXDATA struct ctxdata
 

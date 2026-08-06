@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 #include "main.h"
 
 /* set default values */
@@ -14,6 +16,12 @@ int         opt_timeout      = 600;
 const char* opt_user         = "signing-milter";
 int         opt_addxheader   = 0;
 int         opt_signerfromheader = 0;
+
+/* writable strings for libmilter calls */
+char STR_PROGNAME[]      = "signing-milter";
+char HEADERNAME_XHEADER[]      = "X-Signed-by";
+char HEADERNAME_SIGNER[]       = "X-Signer";
+char HEADERNAME_SKIP_SIGNING[] = "X-Skip-Signing";
 
 /* global variables */
 struct DICT dict_signingtable = {
