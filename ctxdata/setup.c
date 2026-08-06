@@ -1,27 +1,48 @@
 #include "setup.h"
 
+#include <unistd.h>
+
 int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename) {
+
+    int   pemfd = -1;
+    int   chainfd = -1;
+    char* chainfilename = NULL;
+    const char* suffix;
+    size_t len;
+    size_t prefix_len;
+    size_t chainfilename_len;
 
     assert(ctxdata != NULL);
     assert(pemfilename != NULL);
 
-    if (validate_pem_permissions(pemfilename) != 0)
+    if ((pemfd = validate_pem_permissions(pemfilename)) < 0)
         return(1);
 
     if ((ctxdata->pemfilename = strdup(pemfilename)) == NULL) {
         logmsg(LOG_ERR, "error: ctxdata_setup: malloc for ctxdata.pemfilename failed: %m", strerror(errno));
+        close(pemfd);
         return(2);
     }
 
-    if ((ctxdata->cert = load_pem_cert(ctxdata->pemfilename)) == NULL) {
+    if ((ctxdata->cert = load_pem_cert(pemfd)) == NULL) {
         logmsg(LOG_ERR, "error: ctxdata_setup: loading certificate %s failed", ctxdata->pemfilename);
+        close(pemfd);
         return(3);
     }
 
-    if ((ctxdata->key = load_pem_key(ctxdata->pemfilename, NULL)) == NULL) {
-        logmsg(LOG_ERR, "error: ctxdata_setup: loading key %s failed", ctxdata->pemfilename);
+    if (lseek(pemfd, 0, SEEK_SET) < 0) {
+        logmsg(LOG_ERR, "error: ctxdata_setup: lseek on %s failed: %m", ctxdata->pemfilename, strerror(errno));
+        close(pemfd);
         return(4);
     }
+
+    if ((ctxdata->key = load_pem_key(pemfd, NULL)) == NULL) {
+        logmsg(LOG_ERR, "error: ctxdata_setup: loading key %s failed", ctxdata->pemfilename);
+        close(pemfd);
+        return(4);
+    }
+
+    close(pemfd);
 
     ctxdata->pkcs7flags = PKCS7_DETACHED | PKCS7_NOOLDMIMETYPE | PKCS7_STREAM | PKCS7_CRLFEOL;
 
@@ -31,28 +52,37 @@ int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename) {
         return(5);
     }
 
-    if (strstr(ctxdata->pemfilename, "cert+key.pem") == NULL) {
+    /*
+     * Only load chain certificates if the file name ends with "cert+key.pem".
+     * The chain file name is the same prefix with "chain.pem" appended.
+     */
+    len = strlen(ctxdata->pemfilename);
+    if (len < 12 ||
+        (suffix = strstr(ctxdata->pemfilename, "cert+key.pem")) == NULL ||
+        suffix != ctxdata->pemfilename + len - 12) {
         logmsg(LOG_DEBUG, "info: certificate file not named /path/to/foo-cert+key.pem, including chaincerts disabled");
-    } else {
-
-        size_t len;
-        char*  chainfilename;
-
-        len = strlen(ctxdata->pemfilename); /* assume: strlen does not return an error */
-
-        if ((chainfilename = malloc(len)) == NULL) {
-            logmsg(LOG_ERR, "error: ctxdata_setup: malloc for chainfilename failed: %m", strerror(errno));
-            return(6);
-        }
-
-        bzero(chainfilename, len);
-        strncpy(chainfilename, ctxdata->pemfilename, (size_t) len - 12); /* minus strlen('cert+key.pem') */
-        strcat(chainfilename, "chain.pem");
-
-        ctxdata->chain = load_pem_chain(chainfilename);
-        logmsg(LOG_INFO, "info: %schaincerts loaded from %s", ctxdata->chain != NULL ? "" : "no ", chainfilename);
-        free(chainfilename);
+        return(0);
     }
+
+    prefix_len = len - 12;
+    chainfilename_len = prefix_len + 9 + 1;
+
+    if ((chainfilename = malloc(chainfilename_len)) == NULL) {
+        logmsg(LOG_ERR, "error: ctxdata_setup: malloc for chainfilename failed: %m", strerror(errno));
+        return(6);
+    }
+
+    snprintf(chainfilename, chainfilename_len, "%.*schain.pem", (int) prefix_len, ctxdata->pemfilename);
+
+    if ((chainfd = open_and_validate_pem(chainfilename, 1)) >= 0) {
+        ctxdata->chain = load_pem_chain(chainfd);
+        close(chainfd);
+        logmsg(LOG_INFO, "info: %schaincerts loaded from %s", ctxdata->chain != NULL ? "" : "no ", chainfilename);
+    } else {
+        logmsg(LOG_INFO, "info: no chaincerts loaded from %s", chainfilename);
+    }
+
+    free(chainfilename);
 
     return(0);
 }

@@ -1,25 +1,20 @@
 #include "load_pem.h"
 
 /*
- * load an X509 certificate from the PEM file "file"
+ * load an X509 certificate from an open PEM file descriptor
  */
-X509* load_pem_cert(const char* file) {
+X509* load_pem_cert(int fd) {
 
     BIO*  bio  = NULL;
     X509* cert = NULL;
 
-    if ((bio=BIO_new(BIO_s_file())) == NULL) {
-        logmsg(LOG_ERR, "load_pem_cert: BIO_new() failed");
+    if ((bio = BIO_new_fd(fd, BIO_NOCLOSE)) == NULL) {
+        logmsg(LOG_ERR, "load_pem_cert: BIO_new_fd() failed");
         goto end;
     }
 
-    if (BIO_read_filename(bio,file) <= 0) {
-        logmsg(LOG_ERR, "load_pem_cert: BIO_read_filename(%s) failed", file);
-        goto end;
-    }
-
-    if ((cert=PEM_read_bio_X509(bio, NULL, NULL, NULL)) == NULL) {
-        logmsg(LOG_ERR, "load_pem_cert: PEM_read_bio_X509() failed, file=%s", file);
+    if ((cert = PEM_read_bio_X509(bio, NULL, NULL, NULL)) == NULL) {
+        logmsg(LOG_ERR, "load_pem_cert: PEM_read_bio_X509() failed");
         goto end;
     }
 
@@ -30,23 +25,18 @@ end:
     return (cert);
 }
 
-EVP_PKEY* load_pem_key(const char* file, const char* pass) {
+EVP_PKEY* load_pem_key(int fd, const char* pass) {
 
     BIO*      bio  = NULL;
     EVP_PKEY* pkey = NULL;
 
-    if ((bio=BIO_new(BIO_s_file())) == NULL) {
-        logmsg(LOG_ERR, "load_pem_key: BIO_new() failed");
+    if ((bio = BIO_new_fd(fd, BIO_NOCLOSE)) == NULL) {
+        logmsg(LOG_ERR, "load_pem_key: BIO_new_fd() failed");
         goto end;
     }
 
-    if (BIO_read_filename(bio,file) <= 0) {
-        logmsg(LOG_ERR, "load_pem_key: BIO_read_filename(%s) failed", file);
-        goto end;
-    }
-
-    if ((pkey=PEM_read_bio_PrivateKey(bio, NULL, NULL, (void*) pass)) == NULL) {
-        logmsg(LOG_ERR, "load_pem_key: PEM_read_bio_PrivateKey() failed, file=%s", file);
+    if ((pkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, (void*) pass)) == NULL) {
+        logmsg(LOG_ERR, "load_pem_key: PEM_read_bio_PrivateKey() failed");
         goto end;
     }
 
@@ -57,7 +47,7 @@ end:
     return(pkey);
 }
 
-STACK_OF(X509)* load_pem_chain(const char* file) {
+STACK_OF(X509)* load_pem_chain(int fd) {
 
     BIO*                 bio   = NULL;
     STACK_OF(X509_INFO)* sk    = NULL;
@@ -66,18 +56,18 @@ STACK_OF(X509)* load_pem_chain(const char* file) {
     int                  num;
     int                  numcerts;
 
-    if((bio=BIO_new_file(file, "r")) == NULL) {
-        logmsg(LOG_INFO, "load_pem_chain: BIO_new_file(%s) failed", file);
+    if ((bio = BIO_new_fd(fd, BIO_NOCLOSE)) == NULL) {
+        logmsg(LOG_INFO, "load_pem_chain: BIO_new_fd() failed");
         goto end;
     }
 
-    if((sk=PEM_X509_INFO_read_bio(bio,NULL,NULL,NULL)) == NULL) {
-        logmsg(LOG_ERR, "load_pem_chain: PEM_X509_INFO_read_bio(%s) failed", file);
+    if ((sk = PEM_X509_INFO_read_bio(bio, NULL, NULL, NULL)) == NULL) {
+        logmsg(LOG_ERR, "load_pem_chain: PEM_X509_INFO_read_bio() failed");
         goto end;
     }
 
-    if((stack = sk_X509_new_null()) == NULL) {
-        logmsg(LOG_ERR, "load_pem_chain: sk_X509_new_null() == NULL, file=%s", file);
+    if ((stack = sk_X509_new_null()) == NULL) {
+        logmsg(LOG_ERR, "load_pem_chain: sk_X509_new_null() == NULL");
         goto end;
     }
 
@@ -89,22 +79,22 @@ STACK_OF(X509)* load_pem_chain(const char* file) {
         goto end;
     }
 
-    logmsg(LOG_INFO, "info: load_pem_chain: sk_X509_INFO_num returned %i, file=%s", num, file);
+    logmsg(LOG_INFO, "info: load_pem_chain: sk_X509_INFO_num returned %i", num);
     while (sk_X509_INFO_num(sk)) {
-        xi=sk_X509_INFO_shift(sk);
+        xi = sk_X509_INFO_shift(sk);
         if (xi->x509 != NULL) {
-            sk_X509_push(stack,xi->x509);
-            xi->x509=NULL;
+            sk_X509_push(stack, xi->x509);
+            xi->x509 = NULL;
         }
         X509_INFO_free(xi);
     }
 
     numcerts = sk_X509_num(stack);
-    if(numcerts == 0) {
+    if (numcerts == 0) {
         sk_X509_free(stack);
         stack = NULL;
     }
-    logmsg(LOG_INFO, "info: loaded %i certificate%s from %s", numcerts, numcerts != 1 ? "s" : "", file);
+    logmsg(LOG_INFO, "info: loaded %i certificate%s", numcerts, numcerts != 1 ? "s" : "");
 
 end:
     if (bio != NULL)

@@ -34,9 +34,9 @@ extern NODE* appendnode(NODE** head, NODE* node);
 extern NODE* deletenode(NODE* node);
 extern void deletechain(NODE* node);
 
-extern X509* load_pem_cert(const char* file);
-extern EVP_PKEY* load_pem_key(const char* file, const char* pass);
-extern STACK_OF(X509)* load_pem_chain(const char* file);
+extern X509* load_pem_cert(int fd);
+extern EVP_PKEY* load_pem_key(int fd, const char* pass);
+extern STACK_OF(X509)* load_pem_chain(int fd);
 
 extern void logmsg(int priority, const char *fmt, ...);
 extern char *lowercase(char *);
@@ -48,6 +48,7 @@ extern char* separate_header(char* line, char** headerf);
 
 extern void usage(void);
 extern void version(void);
+extern int open_and_validate_pem(const char* pemfilename, int optional);
 extern int validate_pem_permissions(const char* pemfilename);
 
 #endif

@@ -267,6 +267,10 @@ int main(int argc, char** argv) {
         logmsg(LOG_ERR, "setgid(%i) failed: %s", gr->gr_gid, strerror(errno));
         exit(EX_SOFTWARE);
     }
+    if (setgroups(0, NULL) != 0) {
+        logmsg(LOG_ERR, "setgroups(0, NULL) failed: %s", strerror(errno));
+        exit(EX_SOFTWARE);
+    }
     if (setuid(uid) != 0) {
         logmsg(LOG_ERR, "setuid(%i) failed: %s", pw->pw_uid, strerror(errno));
         exit(EX_SOFTWARE);
@@ -316,8 +320,9 @@ int main(int argc, char** argv) {
     /* initialize statistics */
     init_stats();
 
-    /* signal handler for SIGALRM */
+    /* signal handlers */
     signal(SIGALRM, sig_handler);
+    signal(SIGHUP, sig_handler);
 
     /* Run milter */
     if ((c = smfi_main()) != MI_SUCCESS)
