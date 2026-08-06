@@ -1,6 +1,7 @@
 #include "dump_pkcs7flags.h"
 
 void dump_pkcs7flags(int flags) {
+    (void) flags;
 
 #ifndef NDEBUG
     /* 14 flags, the longest is 20 characters -> buffer 20x20 bytes */

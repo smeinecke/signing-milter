@@ -37,7 +37,7 @@
 #define DICT_BUFFER_LEN 512
 
 typedef struct DICT {
-    char*          name;
+    const char*    name;
     int            flags;
     int            stat_fd;
     time_t         mtime;
@@ -97,16 +97,16 @@ struct ctxdata {
  * global variables
  * can be changed by command-line parameters
  */
-extern char* opt_clientgroup;
-extern int   opt_loglevel;
-extern int   opt_logdest;
-extern char* opt_group;
-extern char* opt_keepdir;
-extern char* opt_signingtable;
-extern char* opt_modetable;
-extern char* opt_miltersocket;
-extern int   opt_timeout;
-extern char* opt_user;
+extern const char* opt_clientgroup;
+extern int         opt_loglevel;
+extern int         opt_logdest;
+extern const char* opt_group;
+extern const char* opt_keepdir;
+extern const char* opt_signingtable;
+extern const char* opt_modetable;
+extern char*       opt_miltersocket;
+extern int         opt_timeout;
+extern const char* opt_user;
 extern int   opt_addxheader;
 extern int   opt_signerfromheader;
 

@@ -1,6 +1,7 @@
 #include "dump_mailflags.h"
 
 void dump_mailflags(int flags) {
+    (void) flags;
 
 #ifndef NDEBUG
     /* 5 flags, the longest is 20 characters -> buffer 20x20 bytes */

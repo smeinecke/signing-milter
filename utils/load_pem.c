@@ -25,7 +25,7 @@ end:
     return (cert);
 }
 
-EVP_PKEY* load_pem_key(int fd, const char* pass) {
+EVP_PKEY* load_pem_key(int fd, char* pass) {
 
     BIO*      bio  = NULL;
     EVP_PKEY* pkey = NULL;

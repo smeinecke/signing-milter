@@ -1,18 +1,19 @@
 #include "main.h"
 
 /* set default values */
-char* opt_clientgroup  = NULL;
-int   opt_loglevel     = LOG_NOTICE;
-int   opt_logdest      = LOG_DEST_SYSLOG;
-char* opt_group        = "signing-milter";
-char* opt_keepdir      = NULL;
-char* opt_signingtable = "/etc/signing-milter/signingtable.cdb";
-char* opt_modetable    = NULL;
-char* opt_miltersocket = "inet6:30053@[::1]";
-int   opt_timeout      = 600;
-char* opt_user         = "signing-milter";
-int   opt_addxheader   = 0;
-int   opt_signerfromheader = 0;
+const char* opt_clientgroup  = NULL;
+int         opt_loglevel     = LOG_NOTICE;
+int         opt_logdest      = LOG_DEST_SYSLOG;
+const char* opt_group        = "signing-milter";
+const char* opt_keepdir      = NULL;
+const char* opt_signingtable = "/etc/signing-milter/signingtable.cdb";
+const char* opt_modetable    = NULL;
+static char opt_miltersocket_default[] = "inet6:30053@[::1]";
+char*       opt_miltersocket = opt_miltersocket_default;
+int         opt_timeout      = 600;
+const char* opt_user         = "signing-milter";
+int         opt_addxheader   = 0;
+int         opt_signerfromheader = 0;
 
 /* global variables */
 struct DICT dict_signingtable = {
@@ -48,14 +49,14 @@ int main(int argc, char** argv) {
     struct stat    st;
     int            localsocket = 1;
     mode_t         socket_mode;
-    char*          socket_mode_str;
+    const char*    socket_mode_str;
 
 
     /*
      * compiler warning: "client_gid may be used uninitialized"
      * no one wants that ...
      */
-    uid = gid = client_gid = root_gid = 0;
+    client_gid = 0;
 
     while ((c = getopt(argc, argv, "bc:d:hfg:k:lm:n:s:t:u:vx")) > 0) {
         switch (c) {
@@ -89,7 +90,7 @@ int main(int argc, char** argv) {
             break;
         case 'g': /* group */
             opt_group = optarg;
-            if ((gr = getgrnam(opt_group)) == NULL) {
+            if (getgrnam(opt_group) == NULL) {
                 printf("unknown group: getgrnam(%s) failed", opt_group);
                 exit(EX_DATAERR);
             }
@@ -137,7 +138,7 @@ int main(int argc, char** argv) {
         case 'u': /* user */
             opt_user = optarg;
             /* get passwd/group entries for opt_user and opt_group */
-            if ((pw = getpwnam(opt_user)) == NULL) {
+            if (getpwnam(opt_user) == NULL) {
                 logmsg(LOG_ERR, "unknown user: getpwnam(%s) failed", opt_user);
                 exit(EX_DATAERR);
             }

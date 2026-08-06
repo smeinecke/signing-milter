@@ -1,6 +1,7 @@
 #include "headerchain2signingbuffer.h"
 
 int headerchain2signingbuffer(SMFICTX* ctx, CTXDATA* ctxdata) {
+    (void) ctx;
 
     NODE*          n;
 

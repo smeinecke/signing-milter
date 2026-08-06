@@ -384,7 +384,7 @@ sfsistat callback_eom(SMFICTX* ctx) {
     CTXDATA*       ctxdata;
     BUF_MEM*       outmem;
     struct timeval start_time, end_time, duration;
-    char*          keepdir;
+    const char*    keepdir;
 
     logmsg(LOG_DEBUG, "EOM");
 

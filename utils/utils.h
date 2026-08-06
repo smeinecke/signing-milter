@@ -35,7 +35,7 @@ extern NODE* deletenode(NODE* node);
 extern void deletechain(NODE* node);
 
 extern X509* load_pem_cert(int fd);
-extern EVP_PKEY* load_pem_key(int fd, const char* pass);
+extern EVP_PKEY* load_pem_key(int fd, char* pass);
 extern STACK_OF(X509)* load_pem_chain(int fd);
 
 extern void logmsg(int priority, const char *fmt, ...);
