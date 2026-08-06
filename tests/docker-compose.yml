@@ -1,0 +1,8 @@
+version: "3.8"
+
+services:
+  tests:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile
+    image: signing-milter-tests

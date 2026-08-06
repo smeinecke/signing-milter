@@ -172,6 +172,18 @@ target_link_libraries(signing-milter PRIVATE
 )
 
 # ----------------------------------------------------------------------
+# Unit tests (cmocka)
+# ----------------------------------------------------------------------
+enable_testing()
+
+pkg_check_modules(CMOCKA cmocka)
+if(CMOCKA_FOUND)
+    add_subdirectory(tests/unit)
+else()
+    message(STATUS "cmocka not found; unit tests will not be built")
+endif()
+
+# ----------------------------------------------------------------------
 # Custom check target
 # ----------------------------------------------------------------------
 add_custom_target(check

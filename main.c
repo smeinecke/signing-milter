@@ -221,6 +221,12 @@ int main(int argc, char** argv) {
     if (opt_clientgroup == NULL)
         client_gid = gid;
 
+    /* :relax erlaubt jedem Client, den Socket zu nutzen; dennoch muss chown() fuer
+     * die Gruppe des Prozesses funktionieren, auch wenn signing-milter nicht als root
+     * laeuft (z.B. in lokalen Tests). */
+    if (opt_clientgroup != NULL && strcmp(opt_clientgroup, ":relax") == 0)
+        client_gid = gid;
+
     /* wenn inet in optarg gefunden wird *und* das auch noch direkt am Anfang
      * dann ist's kein lokaler socket */
     if (((p = strstr(opt_miltersocket, "inet")) != NULL) && opt_miltersocket == p)
