@@ -1,6 +1,7 @@
 #ifndef _CONFIG_H_INCLUDED_
 #define _CONFIG_H_INCLUDED_
 #cmakedefine NDEBUG
+#cmakedefine WITH_REDIS
 
 #define STR_PROGVERSION "@STR_PROGVERSION@"
 #endif

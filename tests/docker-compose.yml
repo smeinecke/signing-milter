@@ -1,8 +1,15 @@
-version: "3.8"
-
 services:
+  redis:
+    image: redis:7-alpine
+
   tests:
     build:
       context: ..
       dockerfile: tests/Dockerfile
     image: signing-milter-tests
+    depends_on:
+      - redis
+    command: ["/src/tests/integration/run-redis-test.sh", "/src/build"]
+    user: root
+    environment:
+      - REDIS_HOST=redis

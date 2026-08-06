@@ -86,3 +86,72 @@ int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename) {
 
     return(0);
 }
+
+int ctxdata_setup_from_redis(CTXDATA* ctxdata, const char* redis_key, char* pem, size_t pem_len, char* chain, size_t chain_len, const char* passphrase) {
+
+    X509*           cert = NULL;
+    EVP_PKEY*       key = NULL;
+    STACK_OF(X509)* chainstack = NULL;
+    int             rc = 0;
+
+    assert(ctxdata != NULL);
+    assert(redis_key != NULL);
+    assert(pem != NULL);
+    assert(pem_len > 0);
+
+    cert = load_pem_cert_mem(pem, pem_len);
+    if (cert == NULL) {
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_redis: loading certificate for %s failed", redis_key);
+        rc = 3;
+        goto cleanup;
+    }
+
+    key = load_pem_key_mem(pem, pem_len, passphrase);
+    if (key == NULL) {
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_redis: loading key for %s failed", redis_key);
+        rc = 4;
+        goto cleanup;
+    }
+
+    if (chain != NULL && chain_len > 0) {
+        chainstack = load_pem_chain_mem(chain, chain_len);
+        logmsg(LOG_INFO, "info: %schaincerts loaded from redis for %s",
+               chainstack != NULL ? "" : "no ", redis_key);
+    } else {
+        logmsg(LOG_INFO, "info: no chaincerts from redis for %s", redis_key);
+    }
+
+    if ((ctxdata->pemfilename = strdup(redis_key)) == NULL) {
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_redis: malloc for ctxdata.pemfilename failed: %s", strerror(errno));
+        rc = 2;
+        goto cleanup;
+    }
+
+    ctxdata->cert = cert;
+    ctxdata->key = key;
+    ctxdata->chain = chainstack;
+    cert = NULL;
+    key = NULL;
+    chainstack = NULL;
+
+    ctxdata->pkcs7flags = PKCS7_DETACHED | PKCS7_NOOLDMIMETYPE | PKCS7_STREAM | PKCS7_CRLFEOL;
+
+    ctxdata->buffer_len = MAXHEADERLEN;
+    if ((ctxdata->buffer = malloc(ctxdata->buffer_len)) == NULL) {
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_redis: allocation of %i byte (MAXHEADERLEN) for header failed", MAXHEADERLEN);
+        rc = 5;
+        goto cleanup;
+    }
+
+cleanup:
+    if (cert != NULL)
+        X509_free(cert);
+    if (key != NULL)
+        EVP_PKEY_free(key);
+    if (chainstack != NULL)
+        sk_X509_pop_free(chainstack, X509_free);
+    free(pem);
+    free(chain);
+
+    return rc;
+}

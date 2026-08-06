@@ -84,6 +84,11 @@ void dict_reload(DICT* dict) {
 
     pthread_mutex_lock(&dict_global_lock);
 
+    if (dict->stat_fd < 0 || dict->cdb_path == NULL) {
+        pthread_mutex_unlock(&dict_global_lock);
+        return;
+    }
+
     if (dict->stat_fd >= 0 && fstat(dict->stat_fd, &st) == 0) {
         if (st.st_mtime == dict->mtime && st.st_nlink > 0) {
             pthread_mutex_unlock(&dict_global_lock);
@@ -144,6 +149,11 @@ const char* dict_lookup(DICT* dict, const char* key) {
     int             status = 0;
 
     pthread_mutex_lock(&dict_global_lock);
+
+    if (dict->stat_fd < 0 || dict->result == NULL) {
+        pthread_mutex_unlock(&dict_global_lock);
+        return "";
+    }
 
     /*
      * set the defined return value
@@ -235,9 +245,10 @@ const char* dict_lookup(DICT* dict, const char* key) {
 }
 
 void dict_close(DICT* dict) {
-    cdb_free(&dict->cdb);
-    if (dict->stat_fd >= 0)
+    if (dict->stat_fd >= 0) {
+        cdb_free(&dict->cdb);
         close(dict->stat_fd);
+    }
     free(dict->buffer);
     free(dict->result);
     free(dict->cdb_path);

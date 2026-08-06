@@ -17,6 +17,11 @@ const char* opt_user         = "signing-milter";
 int         opt_addxheader   = 0;
 int         opt_signerfromheader = 0;
 
+const char* opt_redis_uri = NULL;
+const char* opt_redis_prefix = "signing-milter:";
+const char* opt_redis_passphrase = NULL;
+static int  opt_signingtable_explicit = 0;
+
 /* writable strings for libmilter calls */
 char STR_PROGNAME[]      = "signing-milter";
 char HEADERNAME_XHEADER[]      = "X-Signed-by";
@@ -27,7 +32,7 @@ char HEADERNAME_SKIP_SIGNING[] = "X-Skip-Signing";
 struct DICT dict_signingtable = {
     "signingtable",      /* name       */
     DICT_FLAG_TRY0NULL,  /* flags      */
-    0,                   /* stat_fd    */
+    -1,                  /* stat_fd    */
     0,                   /* mtime      */
     CDB_STATIC_INIT,     /* cdb        */
     NULL,                /* buffer     */
@@ -38,7 +43,7 @@ struct DICT dict_signingtable = {
 struct DICT dict_modetable = {
     "modetable",         /* name       */
     DICT_FLAG_TRY0NULL,  /* flags      */
-    0,                   /* stat_fd    */
+    -1,                  /* stat_fd    */
     0,                   /* mtime      */
     CDB_STATIC_INIT,     /* cdb        */
     NULL,                /* buffer     */
@@ -66,7 +71,7 @@ int main(int argc, char** argv) {
      */
     client_gid = 0;
 
-    while ((c = getopt(argc, argv, "bc:d:hfg:k:lm:n:s:t:u:vx")) > 0) {
+    while ((c = getopt(argc, argv, "bc:d:hfg:k:lm:n:P:r:s:t:u:vxW:")) > 0) {
         switch (c) {
         case 'b': /* break contentheader */
             logmsg(LOG_INFO, "option -b is ignored for compatibily reasons, you may remove it safely");
@@ -124,9 +129,16 @@ int main(int argc, char** argv) {
             break;
         case 'm': /* signing table CDB filename */
             opt_signingtable = optarg;
+            opt_signingtable_explicit = 1;
             break;
         case 'n': /* mode table CDB filename */
             opt_modetable = optarg;
+            break;
+        case 'P': /* Redis key prefix */
+            opt_redis_prefix = optarg;
+            break;
+        case 'r': /* Redis URI */
+            opt_redis_uri = optarg;
             break;
         case 's': /* milter socket */
             opt_miltersocket = optarg;
@@ -154,6 +166,35 @@ int main(int argc, char** argv) {
         case 'v': /* Version */
             version();
             exit(EX_OK);
+        case 'W': /* Redis static passphrase file */
+            {
+                int fd;
+                ssize_t r;
+                size_t len;
+                char buf[4096];
+
+                if ((fd = open(optarg, O_RDONLY)) < 0) {
+                    logmsg(LOG_ERR, "cannot open passphrase file %s: %s", optarg, strerror(errno));
+                    exit(EX_DATAERR);
+                }
+                r = read(fd, buf, sizeof(buf) - 1);
+                close(fd);
+                if (r < 0) {
+                    logmsg(LOG_ERR, "cannot read passphrase file %s: %s", optarg, strerror(errno));
+                    exit(EX_DATAERR);
+                }
+                buf[r] = '\0';
+                len = strlen(buf);
+                if (len > 0 && buf[len - 1] == '\n')
+                    buf[len - 1] = '\0';
+
+                opt_redis_passphrase = strdup(buf);
+                if (opt_redis_passphrase == NULL) {
+                    logmsg(LOG_ERR, "strdup(passphrase) failed: %s", strerror(errno));
+                    exit(EX_SOFTWARE);
+                }
+            }
+            break;
         case 'x': /* add X-Header */
             opt_addxheader = (int) !opt_addxheader;
             break;
@@ -326,9 +367,19 @@ int main(int argc, char** argv) {
         logmsg(LOG_INFO, "directory to keep data: %s", opt_keepdir);
     }
 
-    dict_open(opt_signingtable, &dict_signingtable);
+    if (opt_redis_uri != NULL && *opt_redis_uri != '\0' &&
+        !opt_signingtable_explicit &&
+        access(opt_signingtable, F_OK) < 0) {
+        logmsg(LOG_INFO, "signingtable %s not found, skipping CDB fallback because Redis is configured", opt_signingtable);
+    } else {
+        dict_open(opt_signingtable, &dict_signingtable);
+    }
+
     if (opt_modetable)
         dict_open(opt_modetable, &dict_modetable);
+
+    if (redis_global_init() < 0)
+        exit(EX_SOFTWARE);
 
     /* initialize OpenSSL */
     SSL_library_init();
@@ -350,6 +401,8 @@ int main(int argc, char** argv) {
         logmsg(LOG_ERR, "Milter startup failed");
     else
         logmsg(LOG_NOTICE, "stopping %s %s listening on %s", STR_PROGNAME, STR_PROGVERSION, opt_miltersocket);
+
+    redis_global_cleanup();
 
     dict_close(&dict_signingtable);
     if (opt_modetable)

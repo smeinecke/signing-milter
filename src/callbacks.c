@@ -40,6 +40,12 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
     const char*    daemon_name;
     int            i;
 
+    char*          redis_pem = NULL;
+    size_t         redis_pem_len = 0;
+    char*          redis_chain = NULL;
+    size_t         redis_chain_len = 0;
+    int            redis_found = 0;
+
     char sym_daemon_name[] = "{daemon_name}";
     if ((daemon_name = smfi_getsymval(ctx, sym_daemon_name)) == NULL) {
         daemon_name = "smfi_getsymval(daemon_name) failed";
@@ -55,17 +61,27 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
 
     dict_reload(&dict_signingtable);
 
-    pemfilename = dict_lookup(&dict_signingtable, argv[0]);
-    if (pemfilename == NULL || *pemfilename == '\0') {
-        /*
-         * Sender not found in the signing table.
-         * No further action needed.
-         */
-        if (opt_signerfromheader) {
-            logmsg(LOG_DEBUG, "no cert for envsender, will look for '%s'", HEADERNAME_SIGNER);
-        } else {
-            logmsg(LOG_INFO, "no signingdata for '%s'", argv[0]);
-            return SMFIS_ACCEPT;
+    if (opt_redis_uri != NULL && *opt_redis_uri != '\0') {
+        i = redis_lookup_cert(argv[0], &redis_pem, &redis_pem_len, &redis_chain, &redis_chain_len);
+        if (i == -1)
+            return SMFIS_TEMPFAIL;
+        if (i == 0)
+            redis_found = 1;
+    }
+
+    if (!redis_found) {
+        pemfilename = dict_lookup(&dict_signingtable, argv[0]);
+        if (pemfilename == NULL || *pemfilename == '\0') {
+            /*
+             * Sender not found in the signing table.
+             * No further action needed.
+             */
+            if (opt_signerfromheader) {
+                logmsg(LOG_DEBUG, "no cert for envsender, will look for '%s'", HEADERNAME_SIGNER);
+            } else {
+                logmsg(LOG_INFO, "no signingdata for '%s'", argv[0]);
+                return SMFIS_ACCEPT;
+            }
         }
     }
 
@@ -81,7 +97,13 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
             return SMFIS_TEMPFAIL;
     }
 
-    if (pemfilename != NULL && *pemfilename != '\0') {
+    if (redis_found) {
+        logmsg(LOG_INFO, "signingdata from redis for envsender '%s'", argv[0]);
+        if ((i = ctxdata_setup_from_redis(ctxdata, argv[0], redis_pem, redis_pem_len, redis_chain, redis_chain_len, opt_redis_passphrase)) != 0) {
+            logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup_from_redis() failed: rc=%i, envsender='%s'", i, argv[0]);
+            return SMFIS_TEMPFAIL;
+        }
+    } else if (pemfilename != NULL && *pemfilename != '\0') {
         logmsg(LOG_INFO, "signingdata from envsender '%s'", argv[0]);
         if ((i = ctxdata_setup(ctxdata, pemfilename)) != 0) {
             logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup() failed: rc=%i, envsender='%s', file=%s", i, argv[0], pemfilename);
@@ -217,25 +239,48 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
 
     if (strcasecmp(headerf, HEADERNAME_SIGNER) == 0) {
 
-        const char*    pemfilename;
+        const char*    pemfilename = NULL;
+        char*          redis_pem = NULL;
+        size_t         redis_pem_len = 0;
+        char*          redis_chain = NULL;
+        size_t         redis_chain_len = 0;
+        int            redis_found = 0;
 
         logmsg(LOG_DEBUG, "callback_header: signerfrom_header: %s", headerv);
 
         dict_reload(&dict_signingtable);
 
-        pemfilename = dict_lookup(&dict_signingtable, headerv);
-        if (pemfilename == NULL || *pemfilename == '\0') {
-            /*
-             * Sender not found in the signing table.
-             * No further action needed.
-             */
-            logmsg(LOG_INFO, "no signingdata for %s", headerv);
-            return SMFIS_ACCEPT;
+        if (opt_redis_uri != NULL && *opt_redis_uri != '\0') {
+            i = redis_lookup_cert(headerv, &redis_pem, &redis_pem_len, &redis_chain, &redis_chain_len);
+            if (i == -1)
+                return SMFIS_TEMPFAIL;
+            if (i == 0)
+                redis_found = 1;
         }
 
-        if ((i = ctxdata_setup(ctxdata, pemfilename)) != 0) {
-            logmsg(LOG_ERR, "callback_header: ctxdata_setup() failed: rc=%i, headerf=, headerv=, file=%s", i, headerf, headerv, pemfilename);
-            return SMFIS_TEMPFAIL;
+        if (!redis_found) {
+            pemfilename = dict_lookup(&dict_signingtable, headerv);
+            if (pemfilename == NULL || *pemfilename == '\0') {
+                /*
+                 * Sender not found in the signing table.
+                 * No further action needed.
+                 */
+                logmsg(LOG_INFO, "no signingdata for %s", headerv);
+                return SMFIS_ACCEPT;
+            }
+        }
+
+        if (redis_found) {
+            logmsg(LOG_INFO, "signingdata from redis for header signer '%s'", headerv);
+            if ((i = ctxdata_setup_from_redis(ctxdata, headerv, redis_pem, redis_pem_len, redis_chain, redis_chain_len, opt_redis_passphrase)) != 0) {
+                logmsg(LOG_ERR, "callback_header: ctxdata_setup_from_redis() failed: rc=%i, headerf=%s, headerv=%s", i, headerf, headerv);
+                return SMFIS_TEMPFAIL;
+            }
+        } else {
+            if ((i = ctxdata_setup(ctxdata, pemfilename)) != 0) {
+                logmsg(LOG_ERR, "callback_header: ctxdata_setup() failed: rc=%i, headerf=%s, headerv=%s, file=%s", i, headerf, headerv, pemfilename);
+                return SMFIS_TEMPFAIL;
+            }
         }
 
         /*

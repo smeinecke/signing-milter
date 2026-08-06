@@ -3,3 +3,5 @@
 #DISABLE_DAILY_STATISTIK_LOGGING='yes'
 
 #OPTIONS="-x"
+# Redis-backed certificate lookup (requires WITH_REDIS at build time):
+#OPTIONS="-x -r redis://127.0.0.1:6379/0 -P signing-milter: -W /etc/signing-milter/passphrase"

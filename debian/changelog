@@ -1,3 +1,11 @@
+signing-milter (20260807) unstable; urgency=medium
+
+  * Add optional Redis-backed dynamic S/MIME certificate lookup.
+  * Add CMake option WITH_REDIS to build with or without libhiredis.
+  * Add new command-line options -r, -P, -W.
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Wed, 06 Aug 2025 03:33:00 +0200
+
 signing-milter (202302xx) stable; urgency=medium
 
   * Fix .f (https://github.com/andreasschulze/signing-milter/issues/3)

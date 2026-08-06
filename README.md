@@ -73,6 +73,64 @@ To build a Debian package:
 dpkg-buildpackage -us -uc -b
 ```
 
+## Optional Redis certificate backend
+
+If `signing-milter` is built with `WITH_REDIS=ON` (the default), it can fetch
+S/MIME certificates and private keys from a Redis server instead of, or in
+addition to, the local CDB `signingtable`.
+
+The Redis key for an address is built from the configured prefix and the
+lowercased address (e.g. `signing-milter:sender@example.com`). The hash must
+contain the following fields:
+
+* `pem` (required): a PEM blob containing both the signer certificate and the
+  corresponding private key.
+* `chain` (optional): a PEM blob with the intermediate/root certificate chain.
+
+Example Redis `HMSET`:
+
+```bash
+redis-cli HMSET signing-milter:sender@example.com \
+    pem "$(cat /path/to/sender-cert+key.pem)" \
+    chain "$(cat /path/to/sender-chain.pem)"
+```
+
+To enable the Redis backend, add `-r`, optionally `-P` and `-W`, to
+`/etc/default/signing-milter`:
+
+```ini
+OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfix -r redis://127.0.0.1:6379/0 -P signing-milter: -W /etc/signing-milter/passphrase"
+```
+
+The passphrase file is used for encrypted private keys loaded from Redis. When
+Redis is enabled, the milter queries Redis first; on a miss it falls back to the
+local CDB `signingtable`.
+
+## Build from source with or without Redis
+
+By default CMake searches for `libhiredis` and enables Redis support:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+```
+
+To build without Redis support (no `libhiredis` dependency):
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DWITH_REDIS=OFF
+cmake --build build -j"$(nproc)"
+```
+
+## Run the Docker integration tests
+
+The full test suite including the Redis end-to-end test can be run with Docker
+Compose:
+
+```bash
+docker compose -f tests/docker-compose.yml up --build --abort-on-container-exit
+```
+
 ## Basic postfix configuration
 In default configuration the postfix daemon is chrooted to the spool folder located in `/var/spool/postfix/`. To use the socket feature of signing-milter the socket + permissions has to be configured in the `/etc/default/signing-milter` file:
 ```ini

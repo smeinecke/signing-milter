@@ -25,12 +25,21 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/buildflags.mk
 
+CMAKE_FLAGS =
+
+ifneq (,$(filter pkg.signing-milter.noredis,$(DEB_BUILD_PROFILES)))
+    CMAKE_FLAGS += -DWITH_REDIS=OFF
+endif
+
 .PHONY: build
 build:
 	dh build --buildsystem=cmake
 
 %:
 	dh $@ --buildsystem=cmake
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CMAKE_FLAGS)
 
 override_dh_auto_test:
 	dh_auto_build -- check

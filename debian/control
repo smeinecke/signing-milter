@@ -8,6 +8,7 @@ Build-Depends: debhelper (>= 10)
  , shellcheck
  , pkg-config
  , libcdb-dev
+ , libhiredis-dev <!pkg.signing-milter.noredis>
  , dv-libmilter-dev | libmilter-dev
  , dv-libssl-dev | libssl-dev
 Standards-Version: 4.3.0

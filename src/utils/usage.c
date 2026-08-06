@@ -21,6 +21,12 @@ void usage(void) {
     printf("  -n modetable    full path to a lookuptable containing recipientaddresses\n");
     printf("                  for which the alternativ signingmode is enabled\n");
     printf("                  default: %s\n", opt_modetable);
+    printf("  -P prefix       Redis key prefix for certificate lookup\n");
+    printf("                  default: %s\n", opt_redis_prefix);
+    printf("  -r uri          Redis URI for dynamic certificate lookup\n");
+    printf("                  - redis://[password@]host:port/db\n");
+    printf("                  - unix:///path/to/redis.sock\n");
+    printf("                  default: none\n");
     printf("  -s socket       Milter socket in sendmail notation\n");
     printf("                  - unix|local:PATH\n");
     printf("                  - inet:PORT[@HOST]\n");
@@ -30,6 +36,9 @@ void usage(void) {
     printf("                  default: %i\n", opt_timeout);
     printf("  -u user         the user signing-milter should run as\n");
     printf("                  default: %s\n", opt_user);
+    printf("  -W file         file containing the static passphrase for encrypted\n");
+    printf("                  private keys loaded from Redis\n");
+    printf("                  default: none\n");
     printf("  -x              add an X-Header to every signed mail\n");
     printf("                  default: %s\n", opt_addxheader ? "on" : "off");
     printf("\n");

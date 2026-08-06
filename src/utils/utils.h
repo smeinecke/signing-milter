@@ -7,6 +7,7 @@
 #include <syslog.h>
 
 #include "../signing-milter.h"
+#include "redis.h"
 
 #define PHASE_PRE_SIGN	3
 #define PHASE_POST_SIGN	2
@@ -37,6 +38,10 @@ extern void deletechain(NODE* node);
 extern X509* load_pem_cert(int fd);
 extern EVP_PKEY* load_pem_key(int fd, char* pass);
 extern STACK_OF(X509)* load_pem_chain(int fd);
+
+extern X509* load_pem_cert_mem(const char* data, size_t len);
+extern EVP_PKEY* load_pem_key_mem(const char* data, size_t len, const char* pass);
+extern STACK_OF(X509)* load_pem_chain_mem(const char* data, size_t len);
 
 extern void logmsg(int priority, const char *fmt, ...);
 extern char *lowercase(char *);

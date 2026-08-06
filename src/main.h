@@ -3,6 +3,7 @@
 
 #include <grp.h>
 #include <pwd.h>
+#include <fcntl.h>
 #include <openssl/err.h>
 #include <signal.h>
 #include <stdlib.h>

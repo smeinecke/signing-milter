@@ -50,6 +50,7 @@ set(UTILS_SOURCES
     utils/logmsg.c
     utils/lowercase.c
     utils/node.c
+    utils/redis.c
     utils/separate_header.c
     utils/usage.c
     utils/validate_pem_permissions.c
@@ -82,6 +83,12 @@ target_compile_options(signing-milter PRIVATE
     ${LIBCDB_CFLAGS_OTHER}
     ${OPENSSL_CFLAGS_OTHER}
 )
+
+if(WITH_REDIS)
+    target_include_directories(signing-milter PRIVATE ${HIREDIS_INCLUDE_DIRS})
+    target_compile_options(signing-milter PRIVATE ${HIREDIS_CFLAGS_OTHER})
+    target_link_libraries(signing-milter PRIVATE ${HIREDIS_LIBRARIES})
+endif()
 
 if(ENABLE_DMALLOC)
     target_compile_definitions(signing-milter PRIVATE DMALLOC)

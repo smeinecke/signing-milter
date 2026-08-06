@@ -155,6 +155,31 @@ to preserve signatures for mail transiting broken MTAs.
 message will not be signed and simply pass unchanged.
 .RE
 .TP
+.B \-P prefix
+When using the Redis certificate backend (\-r), prepend the given
+.I prefix
+to every Redis key. The default is
+.IR signing-milter: .
+.TP
+.B \-r uri
+Enable the optional Redis certificate backend. When enabled,
+.I signing-milter
+queries Redis for a certificate before falling back to the CDB signingtable.
+The
+.I uri
+has one of the following forms:
+.IR redis://[password@]host:port/db ,
+.IR redis://[username:password@]host:port/db ,
+or
+.IR unix:///path/to/redis.sock .
+TLS (rediss://) is not supported.
+.TP
+.B \-W file
+Read the static passphrase for encrypted private keys from
+.IR file .
+The passphrase is applied when loading private keys from Redis.
+A trailing newline is stripped.
+.TP
 .B \-s socket
 Specifies the socket that should be established by the filter to receive
 connections from
@@ -233,12 +258,16 @@ using facility LOG_MAIL. All messages except priority LOG_NOTICE and LOG_INFO
 are also sent to stdout.
 .\"
 .SH BUGS
-The private signing keys must not be protected by password.
 .I signing-milter
 should also support GnuPG.  A changed signingtable is noticed but not reloaded.
 .I signing-milter
 must currently restart when the signingtable has changed. Same applies to the
 modetable.
+.P
+When using the Redis backend, certificates and private keys are fetched from
+Redis and stored only in memory while the message is being signed.
+A changed Redis dataset is noticed on the next per-thread lookup. Redis keys
+containing signing material should be treated as confidential.
 .\"
 .SH SEE ALSO
 .BR cdb (1),

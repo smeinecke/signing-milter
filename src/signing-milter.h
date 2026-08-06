@@ -105,6 +105,10 @@ extern const char* opt_user;
 extern int   opt_addxheader;
 extern int   opt_signerfromheader;
 
+extern const char* opt_redis_uri;
+extern const char* opt_redis_prefix;
+extern const char* opt_redis_passphrase;
+
 extern struct DICT dict_signingtable;
 
 extern struct DICT dict_modetable;

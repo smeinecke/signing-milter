@@ -14,11 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iproute2 \
     libcdb-dev \
     libcmocka-dev \
+    libhiredis-dev \
     libmilter-dev \
     libssl-dev \
     miltertest \
     openssl \
     postfix \
+    redis-server \
+    redis-tools \
     swaks \
     tinycdb \
     && rm -rf /var/lib/apt/lists/*

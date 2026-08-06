@@ -70,6 +70,7 @@ option(WITH_SYSTEMD  "Install the systemd service unit" ON)
 option(WITH_CRON     "Install cron daily/hourly scripts" ON)
 option(WITH_SUPERVISE "Install the daemontools supervise symlink" OFF)
 option(WITH_EXAMPLES "Install the example /etc/signing-milter directory" ON)
+option(WITH_REDIS    "Enable Redis-backed dynamic certificate lookup" ON)
 
 # ----------------------------------------------------------------------
 # Required dependencies
@@ -88,6 +89,18 @@ if(NOT LIBMILTER_INCLUDE_DIR OR NOT LIBMILTER_LIBRARY)
 endif()
 
 find_package(Threads REQUIRED)
+
+# ----------------------------------------------------------------------
+# Optional Redis client (hiredis)
+# ----------------------------------------------------------------------
+if(WITH_REDIS)
+    pkg_check_modules(HIREDIS hiredis)
+    if(NOT HIREDIS_FOUND)
+        message(FATAL_ERROR
+            "WITH_REDIS is ON but hiredis was not found. "
+            "Install libhiredis-dev or set -DWITH_REDIS=OFF")
+    endif()
+endif()
 
 # ----------------------------------------------------------------------
 # Optional dmalloc
