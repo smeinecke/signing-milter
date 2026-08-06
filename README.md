@@ -13,6 +13,7 @@ This repository replaces the `daemontools` service manager used in the original 
  * focal
  * jammy
  * noble
+ * resolute
 
 ### How to add this repository:
 
@@ -23,10 +24,30 @@ apt-get install signing-milter
 ```
 
 #### Manually
+
+##### Legacy one-line source
+For releases still using the traditional one-line `sources.list` format (Debian buster/bullseye/bookworm, Ubuntu focal/jammy):
+
 ```bash
 apt-get install wget lsb-release ca-certificates
 wget -O /usr/share/keyrings/smeinecke.github.io-signing-milter.key https://smeinecke.github.io/signing-milter/public.key
 echo "deb [signed-by=/usr/share/keyrings/smeinecke.github.io-signing-milter.key] https://smeinecke.github.io/signing-milter/repo $(lsb_release -sc) main" > /etc/apt/sources.list.d/signing-milter.list
+apt-get update && apt-get install signing-milter
+```
+
+##### DEB822 source
+For releases using the new DEB822 `.sources` format (Debian trixie, Ubuntu noble/resolute):
+
+```bash
+apt-get install wget lsb-release ca-certificates
+wget -O /usr/share/keyrings/smeinecke.github.io-signing-milter.key https://smeinecke.github.io/signing-milter/public.key
+cat > /etc/apt/sources.list.d/signing-milter.sources <<EOF
+Types: deb
+URIs: https://smeinecke.github.io/signing-milter/repo
+Suites: $(lsb_release -sc)
+Components: main
+Signed-By: /usr/share/keyrings/smeinecke.github.io-signing-milter.key
+EOF
 apt-get update && apt-get install signing-milter
 ```
 

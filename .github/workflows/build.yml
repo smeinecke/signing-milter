@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os-version: ["debian:buster", "debian:bullseye", "debian:bookworm", "debian:trixie", "ubuntu:noble", "ubuntu:jammy", "ubuntu:focal"]
+        os-version: ["debian:buster", "debian:bullseye", "debian:bookworm", "debian:trixie", "ubuntu:noble", "ubuntu:resolute", "ubuntu:jammy", "ubuntu:focal"]
         arch: ["amd64" , "arm64"]
     steps:
       - uses: actions/checkout@v4
@@ -122,6 +122,7 @@ jobs:
             bookworm
             trixie
             noble
+            resolute
             jammy
             focal
           file: |
