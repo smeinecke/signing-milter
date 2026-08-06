@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <cmocka.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -79,10 +80,57 @@ static void test_lookup_lowercase(void** state) {
     unlink(path);
 }
 
+static void test_dict_reload(void** state) {
+    (void) state;
+    char path[] = "/tmp/signing-milter-test-cdb-XXXXXX";
+    char path2[] = "/tmp/signing-milter-test-cdb-2-XXXXXX";
+    int fd;
+    int fd2;
+    struct cdb_make cdbm;
+    struct cdb_make cdbm2;
+    DICT dict;
+    const char* result;
+
+    fd = mkstemp(path);
+    assert_true(fd >= 0);
+
+    assert_int_equal(cdb_make_start(&cdbm, fd), 0);
+    assert_int_equal(cdb_make_add(&cdbm, "a", 1, "1", 1), 0);
+    assert_int_equal(cdb_make_finish(&cdbm), 0);
+    close(fd);
+
+    memset(&dict, 0, sizeof(dict));
+    dict.name = "test";
+    dict.flags = DICT_FLAG_TRY0NULL;
+
+    dict_open(path, &dict);
+
+    result = dict_lookup(&dict, "<a>");
+    assert_string_equal(result, "1");
+
+    fd2 = mkstemp(path2);
+    assert_true(fd2 >= 0);
+
+    assert_int_equal(cdb_make_start(&cdbm2, fd2), 0);
+    assert_int_equal(cdb_make_add(&cdbm2, "a", 1, "2", 1), 0);
+    assert_int_equal(cdb_make_finish(&cdbm2), 0);
+    close(fd2);
+
+    assert_int_equal(rename(path2, path), 0);
+    dict_reload(&dict);
+
+    result = dict_lookup(&dict, "<a>");
+    assert_string_equal(result, "2");
+
+    dict_close(&dict);
+    unlink(path);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_open_lookup_close),
         cmocka_unit_test(test_lookup_lowercase),
+        cmocka_unit_test(test_dict_reload),
     };
     return cmocka_run_group_tests_name("dict_cdb", tests, NULL, NULL);
 }

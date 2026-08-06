@@ -45,7 +45,8 @@ struct DICT dict_signingtable = {
     CDB_STATIC_INIT,     /* cdb        */
     NULL,                /* buffer     */
     NULL,                /* result     */
-    0                    /* result_len */
+    0,                   /* result_len */
+    NULL                 /* cdb_path   */
 };
 struct DICT dict_modetable = {
     "modetable",         /* name       */
@@ -55,7 +56,8 @@ struct DICT dict_modetable = {
     CDB_STATIC_INIT,     /* cdb        */
     NULL,                /* buffer     */
     NULL,                /* result     */
-    0                    /* result_len */
+    0,                   /* result_len */
+    NULL                 /* cdb_path   */
 };
 
 

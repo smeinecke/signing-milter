@@ -28,6 +28,10 @@
 
 #include "dict_cdb.h"
 
+#include <pthread.h>
+
+static pthread_mutex_t dict_global_lock = PTHREAD_MUTEX_INITIALIZER;
+
 void dict_open(const char* path, DICT* dict) {
 
     struct stat st;
@@ -49,6 +53,12 @@ void dict_open(const char* path, DICT* dict) {
     }
 
     dict->mtime = st.st_mtime;
+
+    if ((dict->cdb_path = malloc(strlen(path) + 1)) == NULL) {
+        logmsg(LOG_ERR, "dict_open: malloc cdb_path: %m", strerror(errno));
+        exit(EX_SOFTWARE);
+    }
+    strcpy(dict->cdb_path, path);
 
     /*
      * allocte some memory
@@ -83,24 +93,63 @@ void dict_open(const char* path, DICT* dict) {
         logmsg(LOG_WARNING, "dict_open: database %s is older than source file %s", path, dict->buffer);
 }
 
-int warn_if_dict_changed(DICT* dict) {
+void dict_reload(DICT* dict) {
 
     struct stat st;
+    struct stat new_st;
+    int         new_fd;
+    struct cdb  new_cdb;
 
-    if (dict->mtime == 0)                   /* not bloody likely */
-        logmsg(LOG_WARNING, "dict_reload: table %s: null time stamp", dict->name);
+    pthread_mutex_lock(&dict_global_lock);
 
-    if (fstat(dict->stat_fd, &st) < 0) {
-        logmsg(LOG_ERR, "dict_reload: fstat: %m", strerror(errno));
-        exit(EX_SOFTWARE);
+    if (dict->stat_fd >= 0 && fstat(dict->stat_fd, &st) == 0) {
+        if (st.st_mtime == dict->mtime && st.st_nlink > 0) {
+            pthread_mutex_unlock(&dict_global_lock);
+            return;
+        }
+        logmsg(LOG_INFO, "%s has changed, reloading", dict->name);
+    } else if (dict->stat_fd >= 0) {
+        logmsg(LOG_WARNING, "dict_reload: fstat %s: %m", dict->name, strerror(errno));
+    } else {
+        logmsg(LOG_WARNING, "dict_reload: %s has no open file", dict->name);
     }
 
-    if (st.st_mtime != dict->mtime || st.st_nlink == 0) {
-        logmsg(LOG_INFO, "%s has changed", dict_signingtable.name);
-        return (1);
+    if (dict->cdb_path == NULL) {
+        logmsg(LOG_ERR, "dict_reload: %s has no path", dict->name);
+        pthread_mutex_unlock(&dict_global_lock);
+        return;
     }
 
-    return (0);
+    if ((new_fd = open(dict->cdb_path, O_RDONLY)) < 0) {
+        logmsg(LOG_WARNING, "dict_reload: open %s: %m", dict->cdb_path, strerror(errno));
+        pthread_mutex_unlock(&dict_global_lock);
+        return;
+    }
+
+    if (cdb_init(&new_cdb, new_fd) != 0) {
+        logmsg(LOG_WARNING, "dict_reload: cdb_init %s: %m", dict->cdb_path, strerror(errno));
+        close(new_fd);
+        pthread_mutex_unlock(&dict_global_lock);
+        return;
+    }
+
+    if (fstat(new_fd, &new_st) < 0) {
+        logmsg(LOG_WARNING, "dict_reload: fstat %s: %m", dict->cdb_path, strerror(errno));
+        cdb_free(&new_cdb);
+        close(new_fd);
+        pthread_mutex_unlock(&dict_global_lock);
+        return;
+    }
+
+    cdb_free(&dict->cdb);
+    if (dict->stat_fd >= 0)
+        close(dict->stat_fd);
+
+    dict->cdb = new_cdb;
+    dict->stat_fd = new_fd;
+    dict->mtime = new_st.st_mtime;
+
+    pthread_mutex_unlock(&dict_global_lock);
 }
 
 const char* dict_lookup(DICT* dict, const char* key) {
@@ -110,6 +159,8 @@ const char* dict_lookup(DICT* dict, const char* key) {
     char*           p;
     char*           new_result = NULL;
     int             status = 0;
+
+    pthread_mutex_lock(&dict_global_lock);
 
     /*
      * set the defined return value
@@ -196,13 +247,16 @@ const char* dict_lookup(DICT* dict, const char* key) {
         dict->result[vlen] = '\0';
     }
 
+    pthread_mutex_unlock(&dict_global_lock);
     return (dict->result);
 
 }
 
 void dict_close(DICT* dict) {
     cdb_free(&dict->cdb);
-    close(dict->stat_fd);
+    if (dict->stat_fd >= 0)
+        close(dict->stat_fd);
     free(dict->buffer);
     free(dict->result);
+    free(dict->cdb_path);
 }

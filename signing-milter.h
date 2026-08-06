@@ -67,6 +67,7 @@ typedef struct DICT {
     char*          buffer;
     char*          result;
     unsigned       result_len;
+    char*          cdb_path;
 } DICT;
 
 #define DICT_FLAG_TRY0NULL      (1<<2)  /* do not append 0 to key/value */

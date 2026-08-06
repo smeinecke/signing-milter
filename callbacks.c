@@ -75,11 +75,7 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
      */
     logmsg(LOG_DEBUG, "MAIL FROM: '%s' (via %s)", argv[0], daemon_name);
 
-    /*
-     * Test whether the table is up to date.
-     * TODO: automatic reload
-     */
-    warn_if_dict_changed(&dict_signingtable);
+    dict_reload(&dict_signingtable);
 
     pemfilename = dict_lookup(&dict_signingtable, argv[0]);
     if (pemfilename == NULL || *pemfilename == '\0') {
@@ -143,7 +139,7 @@ sfsistat callback_envrcpt(SMFICTX* ctx, char** argv) {
     dump_mailflags(ctxdata->mailflags);
     dump_pkcs7flags(ctxdata->pkcs7flags);
 
-    warn_if_dict_changed(&dict_modetable);
+    dict_reload(&dict_modetable);
     dict_lookup(&dict_modetable, argv[0]);
     if (dict_modetable.result != NULL && *dict_modetable.result != '\0') {
         /*
@@ -246,11 +242,7 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
 
         logmsg(LOG_DEBUG, "callback_header: signerfrom_header: %s", headerv);
 
-        /*
-         * Test whether the table is up to date.
-         * TODO: automatic reload
-         */
-        warn_if_dict_changed(&dict_signingtable);
+        dict_reload(&dict_signingtable);
 
         pemfilename = dict_lookup(&dict_signingtable, headerv);
         if (pemfilename == NULL || *pemfilename == '\0') {
