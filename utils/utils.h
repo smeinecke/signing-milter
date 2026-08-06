@@ -11,7 +11,7 @@
 #define PHASE_PRE_SIGN	3
 #define PHASE_POST_SIGN	2
 
-extern int append2buffer(unsigned char** buf, size_t* buf_size, char* data2append, size_t append_data_size);
+extern int append2buffer(unsigned char** buf, size_t* buf_size, const char* data2append, size_t append_data_size);
 extern int bio2file(BIO *b, const char* dir, const char* prefix, const char* queueid);
 extern char* break_after_semicolon(char* string, int phase);
 extern int delete_marked_headers(SMFICTX* ctx, CTXDATA* ctxdata);
@@ -23,7 +23,7 @@ extern void dict_close(DICT* dict);
 
 extern void dump_mailflags(int flags);
 extern void dump_pkcs7flags(int flags);
-extern int get_num_semicolons(char* string);
+extern int get_num_semicolons(const char* string);
 extern char* hdrdup(const char* string);
 extern int headerchain2signingbuffer(SMFICTX* ctx, CTXDATA* ctxdata);
 extern int is_already_signed(const char* headerf, const char* headerv);

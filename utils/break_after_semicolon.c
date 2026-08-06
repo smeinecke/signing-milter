@@ -58,9 +58,9 @@ char* break_after_semicolon(char* string, int phase) {
             *p_new = ' ';
             p_new++;
             p_old++; /* character after ; */
-            if (*p_old != ' ')
-                logmsg(LOG_ERR, "break_after_semicolon: no SPACE after ; in ->%s<-", string);
-            p_old++; /* hopefully the <SPACE> */
+            /* skip any whitespace that was already present, but stop at \0 */
+            while (*p_old == ' ' || *p_old == '\t')
+                p_old++;
         }
     }
     *p_new = '\0';

@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <cmocka.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -59,12 +60,25 @@ static void test_append_zero_bytes(void** state) {
     free(buf);
 }
 
+static void test_append_overflow(void** state) {
+    (void) state;
+    unsigned char* buf = malloc(5);
+    memcpy(buf, "hello", 5);
+    size_t size = SIZE_MAX - 1;
+
+    assert_int_equal(append2buffer(&buf, &size, "!!", 2), 1);
+    assert_int_equal(size, SIZE_MAX - 1);
+    assert_memory_equal(buf, "hello", 5);
+    free(buf);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_append_to_empty),
         cmocka_unit_test(test_append_to_existing),
         cmocka_unit_test(test_append_binary),
         cmocka_unit_test(test_append_zero_bytes),
+        cmocka_unit_test(test_append_overflow),
     };
     return cmocka_run_group_tests_name("append2buffer", tests, NULL, NULL);
 }

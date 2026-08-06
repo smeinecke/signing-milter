@@ -58,6 +58,22 @@ static void test_null_string(void** state) {
     assert_ptr_equal(break_after_semicolon(NULL, PHASE_PRE_SIGN), NULL);
 }
 
+static void test_missing_space(void** state) {
+    (void) state;
+    char* s = strdup("text/plain;boundary=foo");
+    char* result = break_after_semicolon(s, PHASE_PRE_SIGN);
+    assert_string_equal(result, "text/plain;\r\n boundary=foo");
+    free(result);
+}
+
+static void test_trailing_semicolon(void** state) {
+    (void) state;
+    char* s = strdup("text/plain;");
+    char* result = break_after_semicolon(s, PHASE_POST_SIGN);
+    assert_string_equal(result, "text/plain;\n ");
+    free(result);
+}
+
 int main(void) {
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_no_semicolon_pre),
@@ -66,6 +82,8 @@ int main(void) {
         cmocka_unit_test(test_one_semicolon_post),
         cmocka_unit_test(test_multiple_semicolons),
         cmocka_unit_test(test_null_string),
+        cmocka_unit_test(test_missing_space),
+        cmocka_unit_test(test_trailing_semicolon),
     };
     return cmocka_run_group_tests_name("break_after_semicolon", tests, NULL, NULL);
 }
