@@ -154,7 +154,8 @@ sfsistat callback_envrcpt(SMFICTX* ctx, char** argv) {
 
         if (strstr(dict_modetable.result, "skip") != NULL) {
             logmsg(LOG_INFO, "modetable hit: skip signing for %s", argv[0]);
-            /* TODO: does memory need to be freed here? */
+            /* ctxdata is owned by the milter context and is cleaned up
+             * in callback_envfrom or callback_close.  No extra free here. */
             return SMFIS_ACCEPT;
         }
         if (strstr(dict_modetable.result, "opaque") != NULL) {
@@ -218,8 +219,6 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         /*
          * Already signed messages do not need to be
          * processed further
-         * TODO: the detection of whether a mail is already signed
-         *       is certainly not yet perfect
          */
         if (is_already_signed(headerf, headerv)) {
             logmsg(LOG_NOTICE, "mail seemes already signed.");

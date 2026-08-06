@@ -108,6 +108,7 @@ const char* dict_lookup(DICT* dict, const char* key) {
     size_t          keylen;
     unsigned        vlen;
     char*           p;
+    char*           new_result = NULL;
     int             status = 0;
 
     /*
@@ -180,8 +181,12 @@ const char* dict_lookup(DICT* dict, const char* key) {
     if (status) {
         vlen = cdb_datalen(&dict->cdb);
         if (dict->result_len < vlen) {
-            dict->result = realloc(dict->result, vlen + 1);
-            /* TODO: realloc may fail; catch the error */
+            new_result = realloc(dict->result, vlen + 1);
+            if (new_result == NULL) {
+                logmsg(LOG_ERR, "dict_lookup: realloc: %m", strerror(errno));
+                exit(EX_SOFTWARE);
+            }
+            dict->result = new_result;
             dict->result_len = vlen;
         }
         if (cdb_read(&dict->cdb, dict->result, vlen, cdb_datapos(&dict->cdb)) < 0) {
