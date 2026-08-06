@@ -28,6 +28,29 @@ project(signing-milter
 include(GNUInstallDirs)
 include(FindPkgConfig)
 
+# ----------------------------------------------------------------------
+# Version string -- derived from git tags so it is not stale on build.
+# ----------------------------------------------------------------------
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif()
+if(NOT GIT_VERSION)
+    set(GIT_VERSION "unknown")
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(STR_PROGVERSION "${GIT_VERSION}-debug")
+else()
+    set(STR_PROGVERSION "${GIT_VERSION}")
+endif()
+
 # config.h generates the NDEBUG define, so avoid duplicating it
 # from the default CMake build-type flags.
 foreach(_flag_var

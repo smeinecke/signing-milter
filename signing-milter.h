@@ -6,11 +6,6 @@
 #include "config.h"
 
 extern char STR_PROGNAME[];
-#ifdef NDEBUG
-#define STR_PROGVERSION "20210822"
-#else
-#define STR_PROGVERSION "20210822-debug"
-#endif
 
 /*
  * Name of the header added by -x cmdline switch
