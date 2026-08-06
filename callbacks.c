@@ -341,7 +341,6 @@ sfsistat callback_body(SMFICTX* ctx, unsigned char* bodyp, size_t len) {
 
     CTXDATA*       ctxdata;
     unsigned char* start = bodyp;
-    unsigned char* next_c;
     size_t         length = len;
 
     logmsg(LOG_DEBUG, "BODY (%i byte)", len);
@@ -363,13 +362,9 @@ sfsistat callback_body(SMFICTX* ctx, unsigned char* bodyp, size_t len) {
     if ((ctxdata->first_bodychunk_seen == 0) && (ctxdata->mailflags & MF_TYPE_MULTIPART)) {
         /* first chunk */
         ctxdata->first_bodychunk_seen = 1;
-        for(;;) {
-            while (*start != '-' && length > 0) {
-                start++;
-                length--;
-            }
-            next_c = start; next_c++;
-            if (*next_c == '-') break;
+        while (length > 0) {
+            if (*start == '-' && length >= 2 && start[1] == '-')
+                break;
             start++;
             length--;
         }
@@ -437,6 +432,8 @@ sfsistat callback_eom(SMFICTX* ctx) {
             /* logmsg(LOG_DEBUG, "%c, %c, %c, %c",
                               *(new_end-4), *(new_end-3),
                               *(new_end-2), *(new_end-1)); */
+            if (new_end - 4 < ctxdata->data2sign)
+                continue;
             if (   *(new_end-1) == '\n' && *(new_end-2) == '\r'
                 && *(new_end-3) == '-'  && *(new_end-4) == '-'  ) {
               skipped_epilog_bytes = old_end - new_end;
@@ -538,6 +535,8 @@ sfsistat callback_eom(SMFICTX* ctx) {
 
         if (BIO_gets(ctxdata->outbio, headerline, MAXHEADERLEN) < 0) {
             logmsg(LOG_ERR, "%s: error: callback_eom: reading headerline from outBIO failed", ctxdata->queueid);
+            if (headerline)
+                free(headerline);
             return SMFIS_TEMPFAIL;
         }
 
