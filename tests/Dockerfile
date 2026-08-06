@@ -11,12 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     cmake \
     pkg-config \
+    iproute2 \
     libcdb-dev \
     libcmocka-dev \
     libmilter-dev \
     libssl-dev \
     miltertest \
     openssl \
+    postfix \
+    swaks \
     tinycdb \
     && rm -rf /var/lib/apt/lists/*
 
@@ -36,3 +39,9 @@ RUN rm -rf /src/build && \
     cmake --build /src/build -j$(nproc) && \
     ctest --test-dir /src/build --output-on-failure && \
     /src/tests/integration/run-miltertest.sh /src/build
+
+# Run the real Postfix end-to-end test as root.
+USER root
+RUN /src/tests/integration/run-postfix.sh /src/build
+
+USER test
