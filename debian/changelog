@@ -1,10 +1,30 @@
 signing-milter (20260807) unstable; urgency=medium
 
+  * Switch build system from Make to CMake and generate
+    STR_PROGVERSION from git describe.
+  * Restructure source tree into src/, docs/ and scripts/.
+  * Add AGENTS.md with build, test and packaging notes.
+  * Add Ubuntu 26.04 (resolute) support and DEB822 source format.
+  * Add unit and integration test suites with cmocka, miltertest,
+    Docker, GitHub Actions and a real Postfix end-to-end test.
+  * Add automatic CDB reload for signing and mode tables.
+  * Handle Content-* headers without MIME-Version instead of rejecting
+    (closes #5).
+  * Fix CDB dict lookup and dict_open underflows, multipart body parsing
+    OOB and headerline leaks, header parsing and Content-Type detection,
+    and utility buffer/memory helper bugs.
+  * Drop supplementary groups, handle SIGHUP, and allow setgroups(0, NULL)
+    to fail with EPERM.
+  * Remove GPL license headers from all source files, rename COPYING to
+    LICENSE and translate German comments to English.
+  * Resolve actionable TODOs and clean up const-correctness, compiler
+    and analyzer warnings.
+  * Fix remaining low-priority security and hardening findings.
   * Add optional Redis-backed dynamic S/MIME certificate lookup.
   * Add CMake option WITH_REDIS to build with or without libhiredis.
   * Add new command-line options -r, -P, -W.
 
- -- Stefan Meinecke <meinecke@greensec.de>  Wed, 06 Aug 2025 03:33:00 +0200
+ -- Stefan Meinecke <meinecke@greensec.de>  Fri, 07 Aug 2026 03:33:00 +0200
 
 signing-milter (202302xx) stable; urgency=medium
 
