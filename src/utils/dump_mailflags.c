@@ -18,24 +18,28 @@ void dump_mailflags(int flags) {
         return;
     }
 
-    bzero(buf, 4096);
+    char* p = buf;
+    size_t left = 4096;
+    int n;
+
+    p[0] = '\0';
 
     if (flags & MF_TYPE_MIME) {
-	strcat(buf, "MF_TYPE_MIME | ");
+        n = snprintf(p, left, "MF_TYPE_MIME | "); p += n; left -= n;
     }
     if (flags & MF_TYPE_MULTIPART) {
-	strcat(buf, "MF_TYPE_MULTIPART | ");
+        n = snprintf(p, left, "MF_TYPE_MULTIPART | "); p += n; left -= n;
     }
     if (flags & MF_SIGNMODE_OPAQUE) {
-	strcat(buf, "MF_SIGNMODE_OPAQUE | ");
+        n = snprintf(p, left, "MF_SIGNMODE_OPAQUE | "); p += n; left -= n;
     }
     if (flags & MF_SIGNER_FROM_HEADER) {
-	strcat(buf, "MF_SIGNER_FROM_HEADER | ");
+        n = snprintf(p, left, "MF_SIGNER_FROM_HEADER | "); p += n; left -= n;
     }
     if (flags & MF_MIME_VERSION_DEFAULT) {
-	strcat(buf, "MF_MIME_VERSION_DEFAULT | ");
+        n = snprintf(p, left, "MF_MIME_VERSION_DEFAULT | "); p += n; left -= n;
     }
-    strcat(buf, "0");
+    snprintf(p, left, "0");
 
     logmsg(LOG_DEBUG, "dump_mailflags: %s", buf);
 

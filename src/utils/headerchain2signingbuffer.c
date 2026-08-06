@@ -30,16 +30,22 @@ int headerchain2signingbuffer(SMFICTX* ctx, CTXDATA* ctxdata) {
          */
         n = ctxdata->headerchain;
         while (n != NULL) {
-            append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), n->headerf, strlen(n->headerf));
-            append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), ": ", 2);
-            append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), n->headerv, strlen(n->headerv));
-            append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), "\r\n", 2);
+            if (append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), n->headerf, strlen(n->headerf)) != 0 ||
+                append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), ": ", 2) != 0 ||
+                append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), n->headerv, strlen(n->headerv)) != 0 ||
+                append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), "\r\n", 2) != 0) {
+                logmsg(LOG_ERR, "%s: error: headerchain2signingbuffer: append2buffer failed", ctxdata->queueid);
+                return(1);
+            }
             n = n->next;
         }
         /*
          * and another empty line as separator between MIME header and body
          */
-        append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), "\r\n", 2);
+        if (append2buffer(&(ctxdata->data2sign), &(ctxdata->data2sign_len), "\r\n", 2) != 0) {
+            logmsg(LOG_ERR, "%s: error: headerchain2signingbuffer: append2buffer failed", ctxdata->queueid);
+            return(1);
+        }
     }
 
     return(0);

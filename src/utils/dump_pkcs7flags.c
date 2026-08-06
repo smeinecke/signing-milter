@@ -18,51 +18,55 @@ void dump_pkcs7flags(int flags) {
         return;
     }
 
-    bzero(buf, 4096);
+    char* p = buf;
+    size_t left = 4096;
+    int n;
+
+    p[0] = '\0';
 
     if (flags & PKCS7_TEXT) {
-	strcat(buf, "PKCS7_TEXT | ");
+        n = snprintf(p, left, "PKCS7_TEXT | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOCERTS) {
-	strcat(buf, "PKCS7_NOCERTS | ");
+        n = snprintf(p, left, "PKCS7_NOCERTS | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOSIGS) {
-	strcat(buf, "PKCS7_NOSIGS | ");
+        n = snprintf(p, left, "PKCS7_NOSIGS | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOCHAIN) {
-	strcat(buf, "PKCS7_NOCHAIN | ");
+        n = snprintf(p, left, "PKCS7_NOCHAIN | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOINTERN) {
-	strcat(buf, "PKCS7_NOINTERN | ");
+        n = snprintf(p, left, "PKCS7_NOINTERN | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOVERIFY) {
-	strcat(buf, "PKCS7_NOVERIFY | ");
+        n = snprintf(p, left, "PKCS7_NOVERIFY | "); p += n; left -= n;
     }
     if (flags & PKCS7_DETACHED) {
-	strcat(buf, "PKCS7_DETACHED | ");
+        n = snprintf(p, left, "PKCS7_DETACHED | "); p += n; left -= n;
     }
     if (flags & PKCS7_BINARY) {
-	strcat(buf, "PKCS7_BINARY | ");
+        n = snprintf(p, left, "PKCS7_BINARY | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOATTR) {
-	strcat(buf, "PKCS7_NOATTR | ");
+        n = snprintf(p, left, "PKCS7_NOATTR | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOSMIMECAP) {
-	strcat(buf, "PKCS7_NOSMIMECAP | ");
+        n = snprintf(p, left, "PKCS7_NOSMIMECAP | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOOLDMIMETYPE) {
-	strcat(buf, "PKCS7_NOOLDMIMETYPE | ");
+        n = snprintf(p, left, "PKCS7_NOOLDMIMETYPE | "); p += n; left -= n;
     }
     if (flags & PKCS7_CRLFEOL) {
-	strcat(buf, "PKCS7_CRLFEOL | ");
+        n = snprintf(p, left, "PKCS7_CRLFEOL | "); p += n; left -= n;
     }
     if (flags & PKCS7_STREAM) {
-	strcat(buf, "PKCS7_STREAM | ");
+        n = snprintf(p, left, "PKCS7_STREAM | "); p += n; left -= n;
     }
     if (flags & PKCS7_NOCRL) {
-	strcat(buf, "PKCS7_NOCRL | ");
+        n = snprintf(p, left, "PKCS7_NOCRL | "); p += n; left -= n;
     }
-    strcat(buf, "0");
+    snprintf(p, left, "0");
 
     logmsg(LOG_DEBUG, "dump_pkcs7flags: %s", buf);
 

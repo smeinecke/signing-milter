@@ -1,5 +1,7 @@
 #include "bio2file.h"
 
+#include <limits.h>
+
 int bio2file(BIO *b, const char* dir, const char* prefix, const char* queueid) {
 
     BIO*     biofile;
@@ -31,11 +33,18 @@ int bio2file(BIO *b, const char* dir, const char* prefix, const char* queueid) {
         return(2);
     }
 
-    if (BIO_write(biofile, pp->data, (int) pp->length) != (int) pp->length) {
-        logmsg(LOG_ERR, "bio2file: BIO_write failed");
-        BIO_free(biofile);
-        free(bio_filename);
-        return(2);
+    size_t written = 0;
+    while (written < pp->length) {
+        size_t remaining = pp->length - written;
+        int chunk = (remaining > INT_MAX) ? INT_MAX : (int) remaining;
+        int n = BIO_write(biofile, (const char*) pp->data + written, chunk);
+        if (n <= 0) {
+            logmsg(LOG_ERR, "bio2file: BIO_write failed");
+            BIO_free(biofile);
+            free(bio_filename);
+            return(2);
+        }
+        written += (size_t) n;
     }
 
     BIO_free(biofile);

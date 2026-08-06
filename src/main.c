@@ -299,6 +299,14 @@ int main(int argc, char** argv) {
     logmsg(LOG_INFO, "running as uid: %i, gid: %i", (int) uid, (int) gid);
 
     if (opt_keepdir != NULL) {
+        if (stat(opt_keepdir, &st) < 0) {
+            logmsg(LOG_ERR, "directory to keep data: %s: %m", opt_keepdir, strerror(errno));
+            exit(EX_DATAERR);
+        }
+        if (!S_ISDIR(st.st_mode)) {
+            logmsg(LOG_ERR, "directory to keep data: %s is not a directory", opt_keepdir);
+            exit(EX_DATAERR);
+        }
         if (S_IRWXO & st.st_mode) {
             logmsg(LOG_ERR, "directory to keep data: %s: permissions too open: remove any access for other", opt_keepdir);
             exit(EX_DATAERR);

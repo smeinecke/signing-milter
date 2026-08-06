@@ -27,11 +27,12 @@ void dict_open(const char* path, DICT* dict) {
 
     dict->mtime = st.st_mtime;
 
-    if ((dict->cdb_path = malloc(strlen(path) + 1)) == NULL) {
+    path_len = strlen(path);
+    if ((dict->cdb_path = malloc(path_len + 1)) == NULL) {
         logmsg(LOG_ERR, "dict_open: malloc cdb_path: %m", strerror(errno));
         exit(EX_SOFTWARE);
     }
-    strcpy(dict->cdb_path, path);
+    memcpy(dict->cdb_path, path, path_len + 1);
 
     /*
      * allocte some memory
@@ -177,7 +178,7 @@ const char* dict_lookup(DICT* dict, const char* key) {
          * empty sender:
          * query with <> in the cdb file
          */
-        strcpy(dict->buffer, "<>");
+        memcpy(dict->buffer, "<>", 3);
         keylen = 2;
     }
 
