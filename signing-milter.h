@@ -112,6 +112,7 @@ struct ctxdata {
 #define MF_SIGNMODE_OPAQUE             (1<<2)
 #define MF_SIGNER_FROM_HEADER          (1<<3)
 #define MF_SKIP_SIGNING                (1<<4)
+#define MF_MIME_VERSION_DEFAULT        (1<<5)
 
 /*
  * globale Variablen
