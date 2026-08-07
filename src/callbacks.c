@@ -12,16 +12,17 @@ static char* get_auth_identity(SMFICTX* ctx) {
     if (raw == NULL || *raw == '\0')
         return NULL;
 
+    /*
+     * {auth_authen} is the SASL login name.  It is an opaque principal and
+     * must not be treated as an email address (no lowercasing, no <> stripping).
+     */
     len = strlen(raw);
     out = malloc(len + 1);
     if (out == NULL)
         return NULL;
 
-    normalize_address(raw, out, len + 1);
-    if (out[0] == '\0' || strcmp(out, "<>") == 0) {
-        free(out);
-        return NULL;
-    }
+    memcpy(out, raw, len);
+    out[len] = '\0';
     return out;
 }
 
@@ -67,7 +68,6 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
     int            auth_rc;
     int            auth_configured;
     char*          auth_identity = NULL;
-    char           signer_norm[DICT_BUFFER_LEN];
 
     char*          redis_pem = NULL;
     size_t         redis_pem_len = 0;
@@ -138,8 +138,7 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
     ctxdata->auth_identity = auth_identity;
 
     if (redis_found || (pemfilename != NULL && *pemfilename != '\0')) {
-        normalize_address(argv[0], signer_norm, sizeof(signer_norm));
-        auth_rc = auth_signing_authorized(ctxdata->auth_identity, signer_norm);
+        auth_rc = auth_signing_authorized(ctxdata->auth_identity, argv[0]);
         if (auth_rc == -1) {
             logmsg(LOG_ERR, "callback_envfrom: auth_signing_authorized() failed");
             ctxdata_cleanup(ctxdata);
@@ -151,7 +150,7 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
         }
         if (auth_rc == 0) {
             logmsg(LOG_INFO, "callback_envfrom: authenticated identity '%s' not authorized for signer '%s'",
-                   ctxdata->auth_identity ? ctxdata->auth_identity : "(none)", signer_norm);
+                   ctxdata->auth_identity ? ctxdata->auth_identity : "(none)", argv[0]);
             if (!opt_signerfromheader) {
                 ctxdata_cleanup(ctxdata);
                 ctxdata_free(ctxdata);
@@ -318,7 +317,6 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         int            redis_found = 0;
         int            auth_rc;
         int            auth_configured;
-        char           signer_norm[DICT_BUFFER_LEN];
 
         logmsg(LOG_DEBUG, "callback_header: signerfrom_header: %s", headerv);
 
@@ -351,8 +349,7 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         }
 
         if (auth_configured) {
-            normalize_address(headerv, signer_norm, sizeof(signer_norm));
-            auth_rc = auth_signing_authorized(ctxdata->auth_identity, signer_norm);
+            auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv);
             if (auth_rc == -1) {
                 logmsg(LOG_ERR, "callback_header: auth_signing_authorized() failed");
                 free(redis_pem);

@@ -113,23 +113,27 @@ key can be found.  Starting with this version, an optional
 `auth-signing-table` may be used to restrict which signing identities an
 authenticated SMTP/SASL user is allowed to use.
 
-The authenticated identity is read from the libmilter macro
-`{auth_authen}`.  The selected signing identity is checked both when it is
-taken from the envelope sender and when it is supplied via the `X-Signer`
-header (if `-f` is enabled).  If the authenticated identity is not authorized
-for the selected signing identity, the message is not signed.
+The authenticated identity is read from the libmilter macro `{auth_authen}`.
+This macro contains the SASL login name, which is treated as an **opaque
+string** and matched case-sensitively.  It is *not* an email address and is not
+lowercased or stripped of angle brackets.
+
+The selected signing identity (envelope `MAIL FROM` or the `X-Signer` header
+when `-f` is enabled) is an email address and is normalized (lowercase,
+angle brackets removed) before the authorization check.
 
 ### Local CDB auth-signing-table
 
 Create a text file with one or more records per authenticated identity.  The
-key (left-hand side) is the authenticated identity and the value (right-hand
-side) is one or more signing identities, separated by commas or whitespace.
-Email addresses are normalized (lowercase and angle brackets removed) before
-lookup, so `<Sender@EXAMPLE.COM>` and `sender@example.com` are equivalent.
+key (left-hand side) is the exact authenticated identity and the value
+(right-hand side) is one or more signing identities, separated by commas or
+whitespace.  The signer values are normalized before comparison, so
+`<Sender@EXAMPLE.COM>` and `sender@example.com` are equivalent.
 
 ```text
-alice@example.org    sender@example.com, sales@example.com
+alice                sender@example.com, sales@example.com
 bob@example.org      other@example.com
+case@example.org     <Sender@EXAMPLE.COM>, sales@example.com
 ```
 
 Compile the table with `cdb` and reference it with `-a`:
@@ -142,13 +146,17 @@ OPTIONS="... -a /etc/signing-milter/authsigningtable.cdb"
 ### Redis auth-signing-table
 
 If Redis support is compiled in, the auth-signing-table can also be stored in
-Redis.  Keys are `<prefix>auth:<identity>` and contain a Redis set of
+Redis.  The key is `<prefix>auth:<identity>` and contains a Redis set of
 permitted signing identities.  The default prefix is `signing-milter:`.
 
+Because the lookup uses `SISMEMBER`, set members must be stored in the
+**canonical (normalized) signer form**: lowercased and without angle brackets.
+
 ```bash
-redis-cli SADD signing-milter:auth:alice@example.org sender@example.com
-redis-cli SADD signing-milter:auth:alice@example.org sales@example.com
-redis-cli SADD signing-milter:auth:bob@example.org  other@example.com
+redis-cli SADD signing-milter:auth:alice                sender@example.com
+redis-cli SADD signing-milter:auth:alice                sales@example.com
+redis-cli SADD signing-milter:auth:bob@example.org      other@example.com
+redis-cli SADD signing-milter:auth:case@example.org     sender@example.com sales@example.com
 ```
 
 Enable it with `-R` together with the Redis URI and optional prefix:
@@ -159,18 +167,25 @@ OPTIONS="... -R -r redis://127.0.0.1:6379/0 -P signing-milter:"
 
 ### Postfix configuration for authenticated submission
 
-To make sure the milter sees the authenticated identity, attach it to the
-submission service used by authenticated clients:
+To make sure the milter sees the authenticated identity, attach it directly to
+the submission service used by authenticated clients.  Do **not** put the
+signer in the global `smtpd_milters` setting and then let port 25/internet
+clients reach it; that recreates the signing oracle this feature is intended
+to guard against.
 
 ```ini
-smtpd_milters = unix:/var/spool/postfix/signing-milter/signing-milter.sock
-
 submission inet n       -       y       -       -       smtpd
   -o syslog_name=postfix/submission
   -o smtpd_tls_security_level=encrypt
   -o smtpd_sasl_auth_enable=yes
-  -o smtpd_milters=${smtpd_milters}
+  -o smtpd_milters=unix:/var/spool/postfix/signing-milter/signing-milter.sock
 ```
+
+For additional safety, use Postfix `smtpd_sender_login_maps` and
+`reject_authenticated_sender_login_mismatch` so an authenticated client cannot
+use an envelope sender it does not own.  With both mechanisms in place, an
+attacker who authenticates as `alice` cannot force the milter to sign as
+`ceo@example.com` either through `MAIL FROM` or through an `X-Signer` header.
 
 ## Build from source with or without Redis
 
@@ -211,10 +226,19 @@ mkdir -m o-rwx /var/spool/postfix/signing-milter
 chown signing-milter:postfix /var/spool/postfix/signing-milter
 ```
 
-The socket has to be configured in postfix in main.cf as new milter:
+The socket has to be configured in postfix as a milter on the appropriate
+listener.  For an internal, trusted submission-only listener that may be:
+
 ```ini
 smtpd_milters = unix:signing-milter/signing-milter.sock
 ```
+
+> **Warning:** Do not attach `signing-milter` globally to an Internet-facing
+> MX listening on port 25 unless you have another trusted mechanism that
+> guarantees the sender is authorized for the signing identity.  When using the
+> optional `auth-signing-table`, configure the milter only on the authenticated
+> `submission` service, and combine it with Postfix
+> `smtpd_sender_login_maps` / `reject_authenticated_sender_login_mismatch`.
 
 And reload/restart the services:
 ```bash

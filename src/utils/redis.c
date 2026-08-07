@@ -472,33 +472,32 @@ int redis_auth_signing_lookup(const char* auth_identity, const char* signer_iden
     return 0;
 #else
     {
-        char        norm[REDIS_KEY_MAX];
         char        key[REDIS_KEY_MAX];
         const char* prefix = opt_redis_prefix ? opt_redis_prefix : "signing-milter:";
         redisContext* c;
         redisReply* r;
-        size_t      i;
-        int         found = 0;
 
         if (!redis_enabled)
-            return 0;
+            return -1;
 
-        normalize_address(auth_identity, norm, sizeof(norm));
-        if (norm[0] == '\0' || strcmp(norm, "<>") == 0)
-            return 0;
-
-        if (snprintf(key, sizeof(key), "%sauth:%s", prefix, norm) >= (int) sizeof(key)) {
+        /*
+         * auth_identity is the exact, opaque SASL principal.  It is used
+         * verbatim as the Redis key, so only the key length is checked.
+         */
+        if (snprintf(key, sizeof(key), "%sauth:%s", prefix, auth_identity) >= (int) sizeof(key)) {
             logmsg(LOG_ERR, "redis: auth key too long for %s", auth_identity);
             return -1;
         }
+
+        /* signer_identity must already be normalized (lowercase, no <>). */
 
         c = redis_get_ctx();
         if (c == NULL)
             return -1;
 
-        r = redisCommand(c, "SMEMBERS %s", key);
+        r = redisCommand(c, "SISMEMBER %s %s", key, signer_identity);
         if (r == NULL || c->err) {
-            logmsg(LOG_ERR, "redis: SMEMBERS failed: %s",
+            logmsg(LOG_ERR, "redis: SISMEMBER failed: %s",
                    c->err ? c->errstr : "no reply");
             if (r != NULL)
                 freeReplyObject(r);
@@ -515,9 +514,9 @@ int redis_auth_signing_lookup(const char* auth_identity, const char* signer_iden
                 redisFree(c);
                 return -1;
             }
-            r = redisCommand(c, "SMEMBERS %s", key);
+            r = redisCommand(c, "SISMEMBER %s %s", key, signer_identity);
             if (r == NULL || c->err) {
-                logmsg(LOG_ERR, "redis: SMEMBERS failed after reconnect: %s",
+                logmsg(LOG_ERR, "redis: SISMEMBER failed after reconnect: %s",
                        c->err ? c->errstr : "no reply");
                 if (r != NULL)
                     freeReplyObject(r);
@@ -525,28 +524,13 @@ int redis_auth_signing_lookup(const char* auth_identity, const char* signer_iden
             }
         }
 
-        if (r->type != REDIS_REPLY_ARRAY) {
+        if (r->type != REDIS_REPLY_INTEGER) {
             logmsg(LOG_ERR, "redis: unexpected reply type %d", r->type);
             freeReplyObject(r);
             return -1;
         }
 
-        for (i = 0; i < r->elements; i++) {
-            char mem_norm[REDIS_KEY_MAX];
-
-            if (r->element[i]->type != REDIS_REPLY_STRING || r->element[i]->len == 0)
-                continue;
-
-            normalize_address(r->element[i]->str, mem_norm, sizeof(mem_norm));
-            if (mem_norm[0] != '\0' && strcmp(mem_norm, "<>") != 0 &&
-                strcmp(mem_norm, signer_identity) == 0) {
-                found = 1;
-                break;
-            }
-        }
-
-        freeReplyObject(r);
-        return found;
+        return r->integer;
     }
 #endif
 }

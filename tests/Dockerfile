@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmilter-dev \
     libssl-dev \
     miltertest \
+    python3-miltertest \
     openssl \
     postfix \
     redis-server \
@@ -41,7 +42,9 @@ RUN rm -rf /src/build && \
     cmake -S /src -B /src/build -DCMAKE_BUILD_TYPE=Release && \
     cmake --build /src/build -j$(nproc) && \
     ctest --test-dir /src/build --output-on-failure && \
-    /src/tests/integration/run-miltertest.sh /src/build
+    /src/tests/integration/run-miltertest.sh /src/build && \
+    /src/tests/integration/run-miltertest-auth.sh /src/build && \
+    /src/tests/integration/run-miltertest-auth-redis.sh /src/build
 
 # Run the real Postfix end-to-end test as root.
 USER root

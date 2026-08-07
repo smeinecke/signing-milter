@@ -35,9 +35,13 @@ extern int redis_lookup_cert(const char* raw_address,
 
 /*
  * Look up an authenticated identity in Redis and check whether it is permitted
- * to use the given signer identity.  The lookup uses a Redis set at
- * <prefix>auth:<auth_identity> whose members are permitted signer identities.
- * All comparisons are case-insensitive and strip surrounding angle brackets.
+ * to use the given signer identity.  The lookup uses Redis SISMEMBER on the
+ * set at <prefix>auth:<auth_identity>.
+ *
+ * auth_identity is the exact, opaque SASL principal and is used verbatim as
+ * the Redis key.  signer_identity must already be normalized (lowercase, no
+ * angle brackets) by the caller.  Redis set members must therefore be stored
+ * in the same normalized (canonical) signer form.
  *
  * Returns 1 if authorized, 0 if not, -1 on Redis error.
  */

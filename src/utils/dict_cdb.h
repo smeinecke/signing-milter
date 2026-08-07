@@ -18,10 +18,13 @@
  * Look up an authenticated identity in a CDB table and check whether it is
  * permitted to use the given signer identity.  Multiple records with the same
  * key are enumerated; a single record may contain a comma/whitespace-separated
- * list of permitted signer identities.  All lookups are case-insensitive and
- * strip surrounding angle brackets.
+ * list of permitted signer identities.
  *
- * Returns 1 if authorized, 0 if not, -1 on CDB read error.
+ * The authenticated identity (auth_raw) is matched case-sensitively and without
+ * angle-bracket stripping.  The signer identity (signer_raw) must already be
+ * normalized (lowercase, no angle brackets) by the caller.
+ *
+ * Returns 1 if authorized, 0 if not, -1 on CDB read or normalization error.
  */
 extern int dict_auth_signing_lookup(DICT* dict, const char* auth_raw, const char* signer_raw);
 

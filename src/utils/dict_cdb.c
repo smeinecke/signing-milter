@@ -78,28 +78,29 @@ void dict_open(const char* path, DICT* dict) {
         logmsg(LOG_WARNING, "dict_open: database %s is older than source file %s", path, dict->buffer);
 }
 
-void dict_reload(DICT* dict) {
+int dict_reload(DICT* dict) {
 
     struct stat st;
     struct stat new_st;
-    int         new_fd;
+    int         new_fd = -1;
     struct cdb  new_cdb;
 
     pthread_mutex_lock(&dict_global_lock);
 
     if (dict->stat_fd < 0 || dict->cdb_path == NULL) {
         pthread_mutex_unlock(&dict_global_lock);
-        return;
+        return 0;
     }
 
     if (dict->stat_fd >= 0 && fstat(dict->stat_fd, &st) == 0) {
         if (st.st_mtime == dict->mtime && st.st_nlink > 0) {
             pthread_mutex_unlock(&dict_global_lock);
-            return;
+            return 0;
         }
         logmsg(LOG_INFO, "%s has changed, reloading", dict->name);
     } else if (dict->stat_fd >= 0) {
         logmsg(LOG_WARNING, "dict_reload: fstat %s: %m", dict->name, strerror(errno));
+        /* the old fd may be stale; try to (re)open the database */
     } else {
         logmsg(LOG_WARNING, "dict_reload: %s has no open file", dict->name);
     }
@@ -107,20 +108,20 @@ void dict_reload(DICT* dict) {
     if (dict->cdb_path == NULL) {
         logmsg(LOG_ERR, "dict_reload: %s has no path", dict->name);
         pthread_mutex_unlock(&dict_global_lock);
-        return;
+        return -1;
     }
 
     if ((new_fd = open(dict->cdb_path, O_RDONLY)) < 0) {
         logmsg(LOG_WARNING, "dict_reload: open %s: %m", dict->cdb_path, strerror(errno));
         pthread_mutex_unlock(&dict_global_lock);
-        return;
+        return -1;
     }
 
     if (cdb_init(&new_cdb, new_fd) != 0) {
         logmsg(LOG_WARNING, "dict_reload: cdb_init %s: %m", dict->cdb_path, strerror(errno));
         close(new_fd);
         pthread_mutex_unlock(&dict_global_lock);
-        return;
+        return -1;
     }
 
     if (fstat(new_fd, &new_st) < 0) {
@@ -128,7 +129,7 @@ void dict_reload(DICT* dict) {
         cdb_free(&new_cdb);
         close(new_fd);
         pthread_mutex_unlock(&dict_global_lock);
-        return;
+        return -1;
     }
 
     cdb_free(&dict->cdb);
@@ -140,6 +141,7 @@ void dict_reload(DICT* dict) {
     dict->mtime = new_st.st_mtime;
 
     pthread_mutex_unlock(&dict_global_lock);
+    return 0;
 }
 
 const char* dict_lookup(DICT* dict, const char* key) {
@@ -250,7 +252,8 @@ const char* dict_lookup(DICT* dict, const char* key) {
 /*
  * Tokenize a CDB auth table value and check whether it contains the normalized
  * signer identity.  A single record may contain a list delimited by commas
- * and/or whitespace.  Each token is normalized before comparison.
+ * and/or whitespace.  Each token is normalized before comparison; a token that
+ * does not fit into the normalization buffer is a lookup error (fail closed).
  */
 static int auth_signing_value_match(const char* val, size_t vlen, const char* signer_norm) {
 
@@ -261,6 +264,7 @@ static int auth_signing_value_match(const char* val, size_t vlen, const char* si
     char   tok[DICT_BUFFER_LEN];
     char   tok_norm[DICT_BUFFER_LEN];
     int    found = 0;
+    int    norm_ok;
 
     if (vlen == 0)
         return 0;
@@ -292,7 +296,12 @@ static int auth_signing_value_match(const char* val, size_t vlen, const char* si
             continue;
         tok[toklen < sizeof(tok) - 1 ? toklen : sizeof(tok) - 1] = '\0';
 
-        normalize_address(tok, tok_norm, sizeof(tok_norm));
+        norm_ok = normalize_address_safe(tok, tok_norm, sizeof(tok_norm));
+        if (!norm_ok) {
+            logmsg(LOG_ERR, "dict_auth_signing_lookup: signer token too long: '%s'", tok);
+            free(buf);
+            return -1;
+        }
         if (tok_norm[0] != '\0' && strcmp(tok_norm, "<>") != 0 &&
             strcmp(tok_norm, signer_norm) == 0) {
             found = 1;
@@ -311,7 +320,6 @@ int dict_auth_signing_lookup(DICT* dict, const char* auth_raw, const char* signe
     int            status;
     int            found = 0;
     char*          val = NULL;
-    char           signer_norm[DICT_BUFFER_LEN];
 
     if (dict == NULL || dict->stat_fd < 0 || dict->buffer == NULL ||
         auth_raw == NULL || *auth_raw == '\0' ||
@@ -325,15 +333,20 @@ int dict_auth_signing_lookup(DICT* dict, const char* auth_raw, const char* signe
         return 0;
     }
 
-    normalize_address(auth_raw, dict->buffer, DICT_BUFFER_LEN);
-    if (dict->buffer[0] == '\0' || strcmp(dict->buffer, "<>") == 0) {
+    /*
+     * The authenticated identity is an opaque SASL principal and is matched
+     * case-sensitively.  It is only length-checked.
+     */
+    keylen = strlen(auth_raw);
+    if (keylen == 0 || keylen >= DICT_BUFFER_LEN) {
+        logmsg(LOG_ERR, "dict_auth_signing_lookup: auth identity too long or empty");
         pthread_mutex_unlock(&dict_global_lock);
-        return 0;
+        return -1;
     }
-    keylen = strlen(dict->buffer);
+    memcpy(dict->buffer, auth_raw, keylen);
+    dict->buffer[keylen] = '\0';
 
-    normalize_address(signer_raw, signer_norm, sizeof(signer_norm));
-    if (signer_norm[0] == '\0' || strcmp(signer_norm, "<>") == 0) {
+    if (signer_raw[0] == '\0' || strcmp(signer_raw, "<>") == 0) {
         pthread_mutex_unlock(&dict_global_lock);
         return 0;
     }
@@ -365,7 +378,7 @@ int dict_auth_signing_lookup(DICT* dict, const char* auth_raw, const char* signe
         }
         val[vlen] = '\0';
 
-        status = auth_signing_value_match(val, vlen, signer_norm);
+        status = auth_signing_value_match(val, vlen, signer_raw);
         free(val);
         val = NULL;
         if (status == 1) {

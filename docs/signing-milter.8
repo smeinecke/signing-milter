@@ -49,14 +49,17 @@ is a
 .I cdb
 compiled database that maps an authenticated SMTP/SASL identity to one or more
 permitted signing identities.
-Each key (left side) is an authenticated identity; the value (right side) is a
-comma or whitespace separated list of signing identities.
-Email addresses are normalized (lower case, angle brackets removed) before
-lookup.
+Each key (left side) is the exact, case-sensitive authenticated identity (the
+SASL login name, as provided by the libmilter macro
+.IR {auth_authen} );
+the value (right side) is a comma or whitespace separated list of signing
+identities.
+Email addresses in the value are normalized (lower case, angle brackets removed)
+before comparison; the authenticated identity is treated as an opaque string and
+is not normalized.
 When the auth-signing-table is configured, a message is only signed if the
-authenticated identity (taken from the libmilter macro
-.IR {auth_authen} )
-is authorized for the signing identity selected from the envelope sender or the
+authenticated identity is authorized for the signing identity selected from the
+envelope sender or the
 .B X-Signer
 header (if \-f is enabled).
 Messages with an unauthorized or missing authentication identity are not signed.
@@ -183,9 +186,14 @@ to every Redis key. The default is
 .TP
 .B \-R
 Enable the optional Redis auth-signing table.  When enabled, the authenticated
-identity is looked up in Redis as a set of permitted signing identities under the
-key
+identity is looked up in Redis using
+.I SISMEMBER
+on the set at
 .IR <prefix>auth:<identity> .
+Set members must be stored in canonical (lowercase, no angle brackets) signer
+form, because the comparison is done by Redis, not by the milter.
+The authenticated identity is used verbatim as the Redis key and is not
+normalized.
 A message is only signed if the authenticated identity is a member of that set
 for the selected signing identity.
 This option requires \-r.

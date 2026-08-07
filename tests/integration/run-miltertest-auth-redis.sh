@@ -71,7 +71,7 @@ sleep 0.5
 redis-cli -s "$REDIS_SOCK" SADD "${REDIS_PREFIX}auth:alice@example.org" sender@example.com
 redis-cli -s "$REDIS_SOCK" SADD "${REDIS_PREFIX}auth:alice@example.org" sales@example.com
 redis-cli -s "$REDIS_SOCK" SADD "${REDIS_PREFIX}auth:bob@example.org" other@example.com
-redis-cli -s "$REDIS_SOCK" SADD "${REDIS_PREFIX}auth:case@example.org" "<Sender@EXAMPLE.COM>" sales@example.com
+redis-cli -s "$REDIS_SOCK" SADD "${REDIS_PREFIX}auth:case@example.org" sender@example.com sales@example.com
 
 # Start the milter with the Redis auth table and X-Signer enabled.
 "$BUILD_DIR/signing-milter" -u "$(id -un)" -g "$(id -gn)" -c :relax \

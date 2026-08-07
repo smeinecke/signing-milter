@@ -21,12 +21,14 @@ extern int opt_redis_auth_signing_table;
 extern struct DICT dict_auth_signingtable;
 
 /*
- * Check whether auth_identity is authorized to use signer_identity.
+ * Check whether auth_identity (opaque SASL principal) is authorized to use
+ * signer_identity (RFC 5321 address).  The signer identity is normalized
+ * internally; auth_identity is matched case-sensitively.
  *
  * Returns:
  *   1  - authorized (or no auth table configured)
  *   0  - not authorized
- *  -1  - lookup error (fails closed)
+ *  -1  - lookup or normalization error (fails closed)
  */
 extern int auth_signing_authorized(const char* auth_identity, const char* signer_identity);
 

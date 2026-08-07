@@ -19,7 +19,7 @@ extern char* break_after_semicolon(char* string, int phase);
 extern int delete_marked_headers(SMFICTX* ctx, CTXDATA* ctxdata);
 
 extern void dict_open(const char* path, DICT* dict);
-extern void dict_reload(DICT* dict);
+extern int  dict_reload(DICT* dict);
 extern const char* dict_lookup(DICT* dict, const char* key);
 extern void dict_close(DICT* dict);
 

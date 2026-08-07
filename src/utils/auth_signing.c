@@ -26,7 +26,6 @@ struct DICT dict_auth_signingtable = {
 
 int auth_signing_authorized(const char* auth_identity, const char* signer_identity) {
 
-    char auth_norm[DICT_BUFFER_LEN];
     char signer_norm[DICT_BUFFER_LEN];
     int  rc;
 
@@ -40,33 +39,45 @@ int auth_signing_authorized(const char* auth_identity, const char* signer_identi
         signer_identity == NULL || *signer_identity == '\0')
         return 0;
 
-    normalize_address(auth_identity, auth_norm, sizeof(auth_norm));
-    normalize_address(signer_identity, signer_norm, sizeof(signer_norm));
+    /*
+     * The authenticated identity is an opaque SASL principal: do not normalize
+     * it.  The signer identity is an RFC 5321 address and is normalized
+     * (lowercase, strip angle brackets).  Fail closed on overflow.
+     */
+    if (!normalize_address_safe(signer_identity, signer_norm, sizeof(signer_norm))) {
+        logmsg(LOG_ERR, "auth_signing_authorized: signer identity too long or invalid: '%s'",
+               signer_identity);
+        return -1;
+    }
 
-    if (auth_norm[0] == '\0' || strcmp(auth_norm, "<>") == 0 ||
-        signer_norm[0] == '\0' || strcmp(signer_norm, "<>") == 0)
+    if (signer_norm[0] == '\0' || strcmp(signer_norm, "<>") == 0)
         return 0;
 
     if (opt_auth_signing_table != NULL) {
-        dict_reload(&dict_auth_signingtable);
-        rc = dict_auth_signing_lookup(&dict_auth_signingtable, auth_norm, signer_norm);
+        rc = dict_reload(&dict_auth_signingtable);
+        if (rc < 0) {
+            logmsg(LOG_ERR, "auth_signing_authorized: auth table reload failed");
+            return -1;
+        }
+
+        rc = dict_auth_signing_lookup(&dict_auth_signingtable, auth_identity, signer_norm);
         if (rc == 1)
             logmsg(LOG_DEBUG, "authenticated identity '%s' is authorized for signer '%s'",
-                   auth_norm, signer_norm);
+                   auth_identity, signer_norm);
         else if (rc == 0)
             logmsg(LOG_INFO, "authenticated identity '%s' is not authorized for signer '%s'",
-                   auth_norm, signer_norm);
+                   auth_identity, signer_norm);
         return rc;
     }
 
     if (opt_redis_auth_signing_table) {
-        rc = redis_auth_signing_lookup(auth_norm, signer_norm);
+        rc = redis_auth_signing_lookup(auth_identity, signer_norm);
         if (rc == 1)
             logmsg(LOG_DEBUG, "authenticated identity '%s' is authorized for signer '%s' (redis)",
-                   auth_norm, signer_norm);
+                   auth_identity, signer_norm);
         else if (rc == 0)
             logmsg(LOG_INFO, "authenticated identity '%s' is not authorized for signer '%s' (redis)",
-                   auth_norm, signer_norm);
+                   auth_identity, signer_norm);
         return rc;
     }
 
