@@ -63,6 +63,6 @@ void output_stats(void) {
     get_signing_time(&stats_totaltime);
     stats_count = get_signed_mails();
 
-    logmsg(LOG_NOTICE, "STATISTIK: %lu/%ld.%ld", stats_count,
+    logmsg(LOG_NOTICE, "STATISTICS: %lu/%ld.%ld", stats_count,
        (long) stats_totaltime.tv_sec, (long) stats_totaltime.tv_usec);
 }

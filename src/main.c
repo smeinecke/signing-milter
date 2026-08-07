@@ -394,7 +394,6 @@ int main(int argc, char** argv) {
 
     /* signal handlers */
     signal(SIGALRM, sig_handler);
-    signal(SIGHUP, sig_handler);
 
     /* Run milter */
     if ((c = smfi_main()) != MI_SUCCESS)

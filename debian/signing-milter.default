@@ -1,6 +1,6 @@
 # use in /etc/default/signing-milter
-#DISABLE_HOURLY_STATISTIK_LOGGING='yes'
-#DISABLE_DAILY_STATISTIK_LOGGING='yes'
+#DISABLE_HOURLY_STATISTICS_LOGGING='yes'
+#DISABLE_DAILY_STATISTICS_LOGGING='yes'
 
 #OPTIONS="-x"
 # Redis-backed certificate lookup (requires WITH_REDIS at build time):

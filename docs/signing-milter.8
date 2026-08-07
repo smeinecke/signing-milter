@@ -245,10 +245,10 @@ will adjust the sockets owner, group and file mode to allow proper access by
 .\"
 .SH SIGNALS
 .I signing-milter
-dumps statistical data on SIGALARM. The data contains the number of signed
+dumps statistical data on SIGALRM. The data contains the number of signed
 messages and the total signingtime in seconds.milliseconds separated by /. All
-counters are set to zero after SIGALARM. Also on SIGTERM statistical data are
-logged.
+counters are set to zero after SIGALRM. Also on SIGHUP and SIGTERM statistical
+data are logged before terminating the daemon.
 .\"
 .SH STARTUP AND LOGGING
 .I signing-milter

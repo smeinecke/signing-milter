@@ -134,8 +134,8 @@ docker compose -f tests/docker-compose.yml up --build --abort-on-container-exit
 ## Basic postfix configuration
 In default configuration the postfix daemon is chrooted to the spool folder located in `/var/spool/postfix/`. To use the socket feature of signing-milter the socket + permissions has to be configured in the `/etc/default/signing-milter` file:
 ```ini
-#DISABLE_HOURLY_STATISTIK_LOGGING='yes'
-#DISABLE_DAILY_STATISTIK_LOGGING='yes'
+#DISABLE_HOURLY_STATISTICS_LOGGING='yes'
+#DISABLE_DAILY_STATISTICS_LOGGING='yes'
 OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfix"
 ```
 

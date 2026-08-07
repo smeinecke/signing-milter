@@ -23,6 +23,6 @@
 
 . /etc/default/signing-milter
 
-if [ "${DISABLE_HOURLY_STATISTIK_LOGGING}" != "yes" ]; then
-    systemctl reload signing-milter
+if [ "${DISABLE_HOURLY_STATISTICS_LOGGING}" != "yes" ]; then
+    systemctl kill -s SIGALRM signing-milter.service
 fi
