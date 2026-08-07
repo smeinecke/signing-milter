@@ -53,6 +53,7 @@ function(add_unit_test TEST_NAME)
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 endfunction()
 
+add_unit_test(test_address                     src/utils/address.c)
 add_unit_test(test_lowercase                   src/utils/lowercase.c)
 add_unit_test(test_get_num_semicolons          src/utils/get_num_semicolons.c)
 add_unit_test(test_is_multipart_mime           src/utils/is_multipart_mime.c)

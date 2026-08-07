@@ -217,16 +217,26 @@ or
 For
 .IR rediss:// ,
 the connection is wrapped in TLS.  By default the server certificate is
-validated against the system CA store and the URI host is used for SNI.
-Optional query parameters are
-.IR verify= {none,peer,fail} ,
-.IR cacert=/path/to/ca.pem ,
-.IR capath=/path/to/cadir ,
-.IR cert=/path/to/client-cert.pem ,
-.IR key=/path/to/client-key.pem ,
+validated against the system or configured CA store, the certificate chain is
+checked, and the URI host is verified against the server's certificate.
+.IR verify=peer
+performs full chain and hostname/IP verification (this is the default).
+.IR verify=none
+encrypts the connection without authenticating the server identity.
+.IR verify_name=hostname
+overrides the identity that is verified; the default is the URI host.
+.IR sni=hostname
+sets the TLS SNI extension only and does not affect verification; the default
+SNI is the verified identity if it is a DNS name.
+.IR cacert=/path/to/ca.pem
 and
-.IR sni=hostname .
-Client certificates (cert and key) are only used for mutual TLS.
+.IR capath=/path/to/cadir
+override the CA store.
+.IR cert=/path/to/client-cert.pem
+and
+.IR key=/path/to/client-key.pem
+are used for mutual TLS.
+Unknown or duplicate TLS parameters are rejected at startup.
 .TP
 .B \-W file
 Read the static passphrase for encrypted private keys from

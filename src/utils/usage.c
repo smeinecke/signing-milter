@@ -31,7 +31,10 @@ void usage(void) {
     printf("  -r uri          Redis URI for dynamic certificate lookup\n");
     printf("                  - redis://[password@]host:port/db\n");
     printf("                  - rediss://[password@]host:port/db?verify=peer\n");
-    printf("                    (TLS; optional cacert=, capath=, cert=, key=, sni=)\n");
+    printf("                    (TLS; verify={none,peer}; default peer)\n");
+    printf("                    verify_name= sets the expected server identity\n");
+    printf("                    sni= sets only the TLS SNI extension\n");
+    printf("                    cacert=/capath=/cert=/key= for CA and mTLS\n");
     printf("                  - unix:///path/to/redis.sock\n");
     printf("                  default: none\n");
     printf("  -R              enable Redis-backed auth-signing table (requires -r)\n");

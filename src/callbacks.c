@@ -62,8 +62,14 @@ static void envfrom_early_cleanup(SMFICTX* ctx, CTXDATA* ctxdata,
         (void) smfi_setpriv(ctx, NULL);
     }
     free(auth_identity);
-    free(redis_pem);
-    free(redis_chain);
+    /*
+     * redis_pem and redis_chain are owned by ctxdata_setup_from_redis(),
+     * which frees them whether the setup succeeds or fails.  The callers of
+     * envfrom_early_cleanup() may still hold those pointers, but they have
+     * already been freed or are NULL.
+     */
+    (void) redis_pem;
+    (void) redis_chain;
 }
 
 /*

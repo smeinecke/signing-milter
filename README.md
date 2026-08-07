@@ -102,6 +102,13 @@ To enable the Redis certificate backend, add `-r`, optionally `-P` and `-W`, to
 OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfix -r redis://127.0.0.1:6379/0 -P signing-milter: -W /etc/signing-milter/passphrase"
 ```
 
+Redis TLS (`rediss://`) is supported when built with `WITH_REDIS_SSL=ON`.
+`verify=peer` (the default) validates the server certificate chain and
+hostname/IP.  `verify=none` encrypts the connection without authenticating the
+server identity.  The expected identity defaults to the URI host; use
+`verify_name=hostname` to override it.  Use `sni=hostname` to set the TLS SNI
+extension without changing the verified identity.
+
 The passphrase file is used for encrypted private keys loaded from Redis. When
 Redis is enabled, the milter queries Redis first; on a miss it falls back to the
 local CDB `signingtable`.

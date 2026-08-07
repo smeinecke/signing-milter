@@ -352,7 +352,7 @@ int dict_auth_signing_lookup(DICT* dict, const char* auth_raw, const char* signe
     int            found = 0;
     char*          val = NULL;
 
-    if (dict == NULL || dict->stat_fd < 0 || dict->buffer == NULL ||
+    if (dict == NULL ||
         auth_raw == NULL || *auth_raw == '\0' ||
         signer_raw == NULL || *signer_raw == '\0')
         return 0;

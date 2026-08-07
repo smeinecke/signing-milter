@@ -21,7 +21,14 @@ static int redis_tls_initialized = 0;
 #include <sys/time.h>
 
 #ifdef WITH_REDIS_SSL
+#include <arpa/inet.h>
 #include <hiredis/hiredis_ssl.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/x509_vfy.h>
+
+#define TLS_VERIFY_NONE 0
+#define TLS_VERIFY_PEER 1
 #endif
 
 typedef struct redis_uri {
@@ -39,15 +46,16 @@ typedef struct redis_uri {
     char* tls_cert;
     char* tls_key;
     char* tls_sni;
+    char* tls_verify_name;
     int   tls_verify;
 } redis_uri_t;
 
 static redis_uri_t g_uri = {
     0, 0,
     NULL, 6379, 0, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL,
 #ifdef WITH_REDIS_SSL
-    REDIS_SSL_VERIFY_PEER
+    TLS_VERIFY_PEER
 #else
     0
 #endif
@@ -56,7 +64,7 @@ static redis_uri_t g_uri = {
 static int redis_enabled = 0;
 
 #ifdef WITH_REDIS_SSL
-static redisSSLContext* g_ssl_ctx = NULL;
+static SSL_CTX* g_ssl_ctx = NULL;
 #endif
 
 static void redis_uri_free(void) {
@@ -69,11 +77,12 @@ static void redis_uri_free(void) {
     free(g_uri.tls_cert);
     free(g_uri.tls_key);
     free(g_uri.tls_sni);
+    free(g_uri.tls_verify_name);
     memset(&g_uri, 0, sizeof(g_uri));
     g_uri.port = 6379;
     g_uri.db = 0;
 #ifdef WITH_REDIS_SSL
-    g_uri.tls_verify = REDIS_SSL_VERIFY_PEER;
+    g_uri.tls_verify = TLS_VERIFY_PEER;
 #else
     g_uri.tls_verify = 0;
 #endif
@@ -87,28 +96,62 @@ static void redis_free_ctx(void* p) {
 }
 
 #ifdef WITH_REDIS_SSL
+
+/*
+ * Return non-zero if host is an IPv4 or IPv6 literal.
+ */
+static int redis_host_is_ip(const char* host) {
+    unsigned char buf[16];
+
+    if (host == NULL || *host == '\0')
+        return 0;
+
+    if (inet_pton(AF_INET, host, buf) == 1)
+        return 1;
+    if (inet_pton(AF_INET6, host, buf) == 1)
+        return 1;
+    return 0;
+}
+
 /*
  * Parse the optional TLS query parameters for rediss:// URIs.
+ *
  * Supported parameters (after the ?):
- *   verify={none,peer,fail}  -- default: peer
+ *   verify={none,peer}       -- default: peer
+ *   verify_name=hostname     -- identity to verify (default: URI host)
  *   cacert=/path/to/ca.pem   -- CA certificate/bundle
  *   capath=/path/to/cadir    -- CA certificate directory
  *   cert=/path/to/cert.pem   -- client certificate for mTLS
  *   key=/path/to/key.pem     -- client private key for mTLS
- *   sni=hostname             -- SNI to send (default: the host from the URI)
+ *   sni=hostname             -- SNI to send (default: verify_name if DNS)
+ *
+ * Duplicate parameters, unknown parameters, malformed values and mismatched
+ * cert/key are rejected.  On error the function returns -1; redis_parse_uri()
+ * frees the partially-parsed URI.
  */
-static void redis_parse_tls_query(const char* query) {
-    char* buf;
-    char* p;
-    char* amp;
-    char* eq;
+static int redis_parse_tls_query(const char* query) {
+    char*         buf;
+    char*         p;
+    char*         amp;
+    char*         eq;
+    unsigned int  seen = 0;
+    const char*   key;
+    const char*   val;
+
+#define SEEN_VERIFY      0x01
+#define SEEN_VERIFY_NAME 0x02
+#define SEEN_CACERT      0x04
+#define SEEN_CAPATH      0x08
+#define SEEN_CERT        0x10
+#define SEEN_KEY         0x20
+#define SEEN_SNI         0x40
 
     if (query == NULL || *query == '\0')
-        return;
+        return 0;
 
     buf = strdup(query);
     if (buf == NULL)
-        return;
+        return -1;
 
     p = buf;
     while (p != NULL) {
@@ -117,37 +160,133 @@ static void redis_parse_tls_query(const char* query) {
             *amp = '\0';
 
         eq = strchr(p, '=');
-        if (eq != NULL) {
-            *eq = '\0';
-            const char* key = p;
-            const char* val = eq + 1;
+        if (eq == NULL || eq == p || *(eq + 1) == '\0') {
+            logmsg(LOG_ERR, "redis: malformed TLS query parameter (URI redacted)");
+            free(buf);
+            return -1;
+        }
 
-            if (strcmp(key, "cacert") == 0 && *val != '\0')
-                g_uri.tls_cacert = strdup(val);
-            else if (strcmp(key, "capath") == 0 && *val != '\0')
-                g_uri.tls_capath = strdup(val);
-            else if (strcmp(key, "cert") == 0 && *val != '\0')
-                g_uri.tls_cert = strdup(val);
-            else if (strcmp(key, "key") == 0 && *val != '\0')
-                g_uri.tls_key = strdup(val);
-            else if (strcmp(key, "sni") == 0 && *val != '\0')
-                g_uri.tls_sni = strdup(val);
-            else if (strcmp(key, "verify") == 0 && *val != '\0') {
-                if (strcmp(val, "none") == 0)
-                    g_uri.tls_verify = REDIS_SSL_VERIFY_NONE;
-                else if (strcmp(val, "peer") == 0)
-                    g_uri.tls_verify = REDIS_SSL_VERIFY_PEER;
-                else if (strcmp(val, "fail") == 0)
-                    g_uri.tls_verify = REDIS_SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-                else
-                    logmsg(LOG_WARNING, "redis: unknown TLS verify mode '%s', using 'peer'", val);
+        *eq = '\0';
+        key = p;
+        val = eq + 1;
+
+        if (strcmp(key, "verify") == 0) {
+            if (seen & SEEN_VERIFY) {
+                logmsg(LOG_ERR, "redis: duplicate TLS verify parameter (URI redacted)");
+                free(buf);
+                return -1;
             }
+            seen |= SEEN_VERIFY;
+            if (strcmp(val, "none") == 0)
+                g_uri.tls_verify = TLS_VERIFY_NONE;
+            else if (strcmp(val, "peer") == 0)
+                g_uri.tls_verify = TLS_VERIFY_PEER;
+            else {
+                logmsg(LOG_ERR, "redis: invalid TLS verify mode '%s' (URI redacted)", val);
+                free(buf);
+                return -1;
+            }
+        } else if (strcmp(key, "verify_name") == 0) {
+            if (seen & SEEN_VERIFY_NAME) {
+                logmsg(LOG_ERR, "redis: duplicate TLS verify_name parameter (URI redacted)");
+                free(buf);
+                return -1;
+            }
+            seen |= SEEN_VERIFY_NAME;
+            g_uri.tls_verify_name = strdup(val);
+            if (g_uri.tls_verify_name == NULL) {
+                free(buf);
+                return -1;
+            }
+        } else if (strcmp(key, "cacert") == 0) {
+            if (seen & SEEN_CACERT) {
+                logmsg(LOG_ERR, "redis: duplicate TLS cacert parameter (URI redacted)");
+                free(buf);
+                return -1;
+            }
+            seen |= SEEN_CACERT;
+            g_uri.tls_cacert = strdup(val);
+            if (g_uri.tls_cacert == NULL) {
+                free(buf);
+                return -1;
+            }
+        } else if (strcmp(key, "capath") == 0) {
+            if (seen & SEEN_CAPATH) {
+                logmsg(LOG_ERR, "redis: duplicate TLS capath parameter (URI redacted)");
+                free(buf);
+                return -1;
+            }
+            seen |= SEEN_CAPATH;
+            g_uri.tls_capath = strdup(val);
+            if (g_uri.tls_capath == NULL) {
+                free(buf);
+                return -1;
+            }
+        } else if (strcmp(key, "cert") == 0) {
+            if (seen & SEEN_CERT) {
+                logmsg(LOG_ERR, "redis: duplicate TLS cert parameter (URI redacted)");
+                free(buf);
+                return -1;
+            }
+            seen |= SEEN_CERT;
+            g_uri.tls_cert = strdup(val);
+            if (g_uri.tls_cert == NULL) {
+                free(buf);
+                return -1;
+            }
+        } else if (strcmp(key, "key") == 0) {
+            if (seen & SEEN_KEY) {
+                logmsg(LOG_ERR, "redis: duplicate TLS key parameter (URI redacted)");
+                free(buf);
+                return -1;
+            }
+            seen |= SEEN_KEY;
+            g_uri.tls_key = strdup(val);
+            if (g_uri.tls_key == NULL) {
+                free(buf);
+                return -1;
+            }
+        } else if (strcmp(key, "sni") == 0) {
+            if (seen & SEEN_SNI) {
+                logmsg(LOG_ERR, "redis: duplicate TLS sni parameter (URI redacted)");
+                free(buf);
+                return -1;
+            }
+            seen |= SEEN_SNI;
+            g_uri.tls_sni = strdup(val);
+            if (g_uri.tls_sni == NULL) {
+                free(buf);
+                return -1;
+            }
+        } else {
+            logmsg(LOG_ERR, "redis: unknown TLS query parameter '%s' (URI redacted)", key);
+            free(buf);
+            return -1;
         }
 
         p = (amp != NULL) ? amp + 1 : NULL;
     }
 
     free(buf);
+
+    if ((seen & SEEN_CERT) != 0 && (seen & SEEN_KEY) == 0) {
+        logmsg(LOG_ERR, "redis: TLS cert given without key (URI redacted)");
+        return -1;
+    }
+    if ((seen & SEEN_KEY) != 0 && (seen & SEEN_CERT) == 0) {
+        logmsg(LOG_ERR, "redis: TLS key given without cert (URI redacted)");
+        return -1;
+    }
+
+    return 0;
+
+#undef SEEN_VERIFY
+#undef SEEN_VERIFY_NAME
+#undef SEEN_CACERT
+#undef SEEN_CAPATH
+#undef SEEN_CERT
+#undef SEEN_KEY
+#undef SEEN_SNI
 }
 #endif /* WITH_REDIS_SSL */
 
@@ -159,6 +298,7 @@ static int redis_parse_uri(const char* uri) {
     char* colon;
     char* qm;
     char* query = NULL;
+    int   rc;
 
     if (uri == NULL || *uri == '\0') {
         logmsg(LOG_INFO, "redis: no URI configured");
@@ -206,6 +346,7 @@ static int redis_parse_uri(const char* uri) {
 #else
         logmsg(LOG_ERR, "redis: rediss:// (TLS) is not supported in this build");
         free(work);
+        redis_uri_free();
         return -1;
 #endif
         p = work + 7;
@@ -219,6 +360,7 @@ static int redis_parse_uri(const char* uri) {
     } else {
         logmsg(LOG_ERR, "redis: unsupported URI scheme (URI redacted)");
         free(work);
+        redis_uri_free();
         return -1;
     }
 
@@ -253,6 +395,7 @@ static int redis_parse_uri(const char* uri) {
             free(userpass);
             free(query);
             free(work);
+            redis_uri_free();
             return -1;
         }
 
@@ -266,6 +409,7 @@ static int redis_parse_uri(const char* uri) {
                     free(userpass);
                     free(query);
                     free(work);
+                    redis_uri_free();
                     return -1;
                 }
             }
@@ -276,6 +420,7 @@ static int redis_parse_uri(const char* uri) {
                     free(userpass);
                     free(query);
                     free(work);
+                    redis_uri_free();
                     return -1;
                 }
             }
@@ -287,6 +432,7 @@ static int redis_parse_uri(const char* uri) {
                     free(userpass);
                     free(query);
                     free(work);
+                    redis_uri_free();
                     return -1;
                 }
             }
@@ -299,6 +445,7 @@ static int redis_parse_uri(const char* uri) {
             logmsg(LOG_ERR, "redis: strdup(host) failed: %s", strerror(errno));
             free(query);
             free(work);
+            redis_uri_free();
             return -1;
         }
     }
@@ -327,12 +474,19 @@ static int redis_parse_uri(const char* uri) {
         logmsg(LOG_ERR, "redis: empty host in URI (URI redacted)");
         free(query);
         free(work);
+        redis_uri_free();
         return -1;
     }
 
     if (query != NULL) {
 #ifdef WITH_REDIS_SSL
-        redis_parse_tls_query(query);
+        rc = redis_parse_tls_query(query);
+        if (rc < 0) {
+            free(query);
+            free(work);
+            redis_uri_free();
+            return -1;
+        }
 #endif
         free(query);
     }
@@ -375,23 +529,77 @@ static redisContext* redis_do_connect(void) {
         return NULL;
     }
 
+    if (redisSetTimeout(c, tv) != REDIS_OK) {
+        logmsg(LOG_ERR, "redis: redisSetTimeout() failed");
+        redisFree(c);
+        return NULL;
+    }
+
 #ifdef WITH_REDIS_SSL
     if (g_uri.use_tls) {
+        SSL*          ssl = NULL;
+        const char*   verify_name;
+        const char*   sni;
+
         if (g_ssl_ctx == NULL) {
             logmsg(LOG_ERR, "redis: TLS context not initialized");
             redisFree(c);
             return NULL;
         }
-        if (redisInitiateSSLWithContext(c, g_ssl_ctx) != REDIS_OK) {
+
+        ssl = SSL_new(g_ssl_ctx);
+        if (ssl == NULL) {
+            logmsg(LOG_ERR, "redis: SSL_new() failed");
+            redisFree(c);
+            return NULL;
+        }
+
+        verify_name = g_uri.tls_verify_name != NULL ? g_uri.tls_verify_name : g_uri.host;
+        sni = g_uri.tls_sni != NULL ? g_uri.tls_sni : verify_name;
+
+        if (g_uri.tls_verify == TLS_VERIFY_PEER) {
+            if (redis_host_is_ip(verify_name)) {
+                if (X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(ssl), verify_name) != 1) {
+                    logmsg(LOG_ERR, "redis: X509_VERIFY_PARAM_set1_ip_asc(%s) failed", verify_name);
+                    SSL_free(ssl);
+                    redisFree(c);
+                    return NULL;
+                }
+            } else {
+                if (X509_VERIFY_PARAM_set1_host(SSL_get0_param(ssl), verify_name, 0) != 1) {
+                    logmsg(LOG_ERR, "redis: X509_VERIFY_PARAM_set1_host(%s) failed", verify_name);
+                    SSL_free(ssl);
+                    redisFree(c);
+                    return NULL;
+                }
+            }
+            SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);
+        } else {
+            SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
+        }
+
+        /*
+         * SNI is only sent for DNS names.  If no explicit sni= is given, we
+         * fall back to the verification identity only when it is a hostname.
+         */
+        if (sni != NULL && !redis_host_is_ip(sni)) {
+            if (SSL_set_tlsext_host_name(ssl, sni) != 1) {
+                logmsg(LOG_ERR, "redis: SSL_set_tlsext_host_name(%s) failed", sni);
+                SSL_free(ssl);
+                redisFree(c);
+                return NULL;
+            }
+        }
+
+        if (redisInitiateSSL(c, ssl) != REDIS_OK) {
             logmsg(LOG_ERR, "redis: TLS handshake failed: %s",
                    c->err ? c->errstr : "unknown");
+            SSL_free(ssl);
             redisFree(c);
             return NULL;
         }
     }
 #endif
-
-    redisSetTimeout(c, tv);
 
     if (g_uri.password != NULL) {
         redisReply* r;
@@ -512,27 +720,43 @@ int redis_global_init(void) {
 
 #ifdef WITH_REDIS_SSL
     if (g_uri.use_tls) {
-        redisSSLContextError ssl_error;
-        redisSSLOptions ssl_options;
-
         if (redisInitOpenSSL() != REDIS_OK) {
             logmsg(LOG_ERR, "redis: redisInitOpenSSL() failed");
-            return -1;
+            goto init_failed;
         }
 
-        memset(&ssl_options, 0, sizeof(ssl_options));
-        ssl_options.cacert_filename = g_uri.tls_cacert;
-        ssl_options.capath = g_uri.tls_capath;
-        ssl_options.cert_filename = g_uri.tls_cert;
-        ssl_options.private_key_filename = g_uri.tls_key;
-        ssl_options.server_name = g_uri.tls_sni != NULL ? g_uri.tls_sni : g_uri.host;
-        ssl_options.verify_mode = g_uri.tls_verify;
-
-        g_ssl_ctx = redisCreateSSLContextWithOptions(&ssl_options, &ssl_error);
+        g_ssl_ctx = SSL_CTX_new(TLS_client_method());
         if (g_ssl_ctx == NULL) {
-            logmsg(LOG_ERR, "redis: TLS context creation failed: %s",
-                   redisSSLContextGetError(ssl_error));
-            return -1;
+            logmsg(LOG_ERR, "redis: SSL_CTX_new() failed");
+            goto init_failed;
+        }
+
+        if (g_uri.tls_cert != NULL && g_uri.tls_key != NULL) {
+            if (SSL_CTX_use_certificate_file(g_ssl_ctx, g_uri.tls_cert, SSL_FILETYPE_PEM) != 1) {
+                logmsg(LOG_ERR, "redis: failed to load client certificate %s", g_uri.tls_cert);
+                goto init_failed;
+            }
+            if (SSL_CTX_use_PrivateKey_file(g_ssl_ctx, g_uri.tls_key, SSL_FILETYPE_PEM) != 1) {
+                logmsg(LOG_ERR, "redis: failed to load client private key %s", g_uri.tls_key);
+                goto init_failed;
+            }
+            if (SSL_CTX_check_private_key(g_ssl_ctx) != 1) {
+                logmsg(LOG_ERR, "redis: client certificate and private key do not match");
+                goto init_failed;
+            }
+        }
+
+        if (g_uri.tls_cacert != NULL || g_uri.tls_capath != NULL) {
+            if (SSL_CTX_load_verify_locations(g_ssl_ctx, g_uri.tls_cacert, g_uri.tls_capath) != 1) {
+                logmsg(LOG_ERR, "redis: failed to load CA certificate(s) from %s",
+                       g_uri.tls_cacert != NULL ? g_uri.tls_cacert : g_uri.tls_capath);
+                goto init_failed;
+            }
+        } else if (g_uri.tls_verify == TLS_VERIFY_PEER) {
+            if (SSL_CTX_set_default_verify_paths(g_ssl_ctx) != 1) {
+                logmsg(LOG_ERR, "redis: failed to load default CA certificate paths");
+                goto init_failed;
+            }
         }
     }
 #endif
@@ -548,12 +772,22 @@ int redis_global_init(void) {
     rc = pthread_key_create(&redis_tls, redis_free_ctx);
     if (rc != 0) {
         logmsg(LOG_ERR, "redis: pthread_key_create() failed: %s", strerror(errno));
-        return -1;
+        goto init_failed;
     }
     redis_tls_initialized = 1;
     redis_enabled = 1;
 
     return 0;
+
+init_failed:
+#ifdef WITH_REDIS_SSL
+    if (g_ssl_ctx != NULL) {
+        SSL_CTX_free(g_ssl_ctx);
+        g_ssl_ctx = NULL;
+    }
+#endif
+    redis_uri_free();
+    return -1;
 #endif
 }
 
@@ -566,7 +800,7 @@ void redis_global_cleanup(void) {
 
 #ifdef WITH_REDIS_SSL
     if (g_ssl_ctx != NULL) {
-        redisFreeSSLContext(g_ssl_ctx);
+        SSL_CTX_free(g_ssl_ctx);
         g_ssl_ctx = NULL;
     }
 #endif
@@ -604,7 +838,10 @@ int redis_lookup_cert(const char* raw_address,
         if (!redis_enabled)
             return 1;
 
-        normalize_address(raw_address, norm, sizeof(norm));
+        if (!normalize_address_safe(raw_address, norm, sizeof(norm))) {
+            logmsg(LOG_ERR, "redis: signer identity too long for Redis lookup: %s", raw_address);
+            return -1;
+        }
         if (snprintf(key, sizeof(key), "%s%s", prefix, norm) >= (int) sizeof(key)) {
             logmsg(LOG_ERR, "redis: key too long for %s", raw_address);
             return -1;
