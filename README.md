@@ -173,4 +173,8 @@ Since version 20120731 signing-milter also supports intermediate certificates.
 Just name your certificate with the suffix `-cert+key.pem` and put the intermediate + root certificate in a file suffixed by `-chain.pem` in the same folder.
 
 ## Contributing
+
 The project is based on [signing-milter.org](https://signing-milter.org/) by Andreas Schulze.
+
+Thanks to [Rouven Spreckels](https://github.com/n3vu0r) for the statistics
+logging fix in [PR #9](https://github.com/smeinecke/signing-milter/pull/9).
