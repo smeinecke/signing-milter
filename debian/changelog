@@ -1,3 +1,13 @@
+signing-milter (20260807-1) unstable; urgency=medium
+
+  * Fix statistics logging: use SIGALRM instead of SIGHUP, so cron jobs no
+    longer terminate the daemon (PR #9, Rouven Spreckels).
+  * Handle SIGALRM in a dedicated sigwait() thread for async-signal safety.
+  * Rename STATISTIK* environment variables and log output to STATISTICS.
+  * Update systemd service, cron scripts, default config and man page.
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Fri, 07 Aug 2026 12:03:39 +0200
+
 signing-milter (20260807) unstable; urgency=medium
 
   * Switch build system from Make to CMake and generate
