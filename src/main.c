@@ -52,6 +52,8 @@ struct DICT dict_modetable = {
     NULL                 /* cdb_path   */
 };
 
+/* statistics signal watcher thread */
+static pthread_t stats_thread;
 
 int main(int argc, char** argv) {
     int            c;
@@ -393,7 +395,37 @@ int main(int argc, char** argv) {
     init_stats();
 
     /* signal handlers */
-    signal(SIGALRM, sig_handler);
+    {
+        sigset_t set;
+        struct sigaction sa;
+
+        sigemptyset(&set);
+        sigaddset(&set, SIGALRM);
+        sigaddset(&set, SIGHUP);
+        sigaddset(&set, SIGINT);
+        sigaddset(&set, SIGTERM);
+        if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) {
+            logmsg(LOG_ERR, "pthread_sigmask(SIG_BLOCK) failed: %s", strerror(errno));
+            exit(EX_SOFTWARE);
+        }
+
+        /*
+         * Ensure SIGALRM has the default action.  sigwait() cannot catch a
+         * signal whose action is SIG_IGN, and libmilter would otherwise catch
+         * SIGHUP/SIGINT/SIGTERM for its own shutdown path.
+         */
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = SIG_DFL;
+        if (sigaction(SIGALRM, &sa, NULL) != 0) {
+            logmsg(LOG_ERR, "sigaction(SIGALRM) failed: %s", strerror(errno));
+            exit(EX_SOFTWARE);
+        }
+
+        if (pthread_create(&stats_thread, NULL, stats_signal_thread, NULL) != 0) {
+            logmsg(LOG_ERR, "pthread_create(stats_signal_thread) failed: %s", strerror(errno));
+            exit(EX_SOFTWARE);
+        }
+    }
 
     /* Run milter */
     if ((c = smfi_main()) != MI_SUCCESS)
@@ -421,18 +453,51 @@ int main(int argc, char** argv) {
     exit(c);
 }
 
-/* under Linux a sighandler must reenable itself */
-void sig_handler(int sig) {
+/* statistics signal watcher: sigwait for SIGALRM and dump/reset stats */
+void* stats_signal_thread(void* arg) {
 
-    logmsg(LOG_INFO, "%s: signal %i received", STR_PROGNAME, sig);
-    signal(sig, sig_handler);
+    sigset_t wait_set;
+    sigset_t block_set;
+    int      sig;
 
-    output_stats();
-    reset_stats();
+    (void) arg;
+
+    /*
+     * Block ALRM, HUP, INT and TERM in this thread.  The main loop uses
+     * sigwait() for ALRM, while libmilter has its own sigwait() thread for
+     * HUP/INT/TERM.  Blocking them here prevents the default action from
+     * killing the process if one of those signals is directed at this thread.
+     */
+    sigemptyset(&block_set);
+    sigaddset(&block_set, SIGALRM);
+    sigaddset(&block_set, SIGHUP);
+    sigaddset(&block_set, SIGINT);
+    sigaddset(&block_set, SIGTERM);
+    (void) pthread_sigmask(SIG_SETMASK, &block_set, NULL);
+
+    sigemptyset(&wait_set);
+    sigaddset(&wait_set, SIGALRM);
+
+    for (;;) {
+        if (sigwait(&wait_set, &sig) != 0) {
+            logmsg(LOG_ERR, "%s: sigwait failed: %s", STR_PROGNAME, strerror(errno));
+            continue;
+        }
+
+        if (sig != SIGALRM)
+            continue;
+
+        logmsg(LOG_INFO, "%s: SIGALRM received, dumping statistics", STR_PROGNAME);
+
+        output_stats();
+        reset_stats();
 
 #ifdef DMALLOC
-    logmsg(LOG_DEBUG, "%s: dumping dmalloc statistics", STR_PROGNAME);
-    dmalloc_log_stats();
-    dmalloc_log_unfreed();
+        logmsg(LOG_DEBUG, "%s: dumping dmalloc statistics", STR_PROGNAME);
+        dmalloc_log_stats();
+        dmalloc_log_unfreed();
 #endif
+    }
+
+    return(NULL);
 }

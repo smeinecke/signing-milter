@@ -27,6 +27,6 @@
 #endif
 
 int main(int argc, char** argv);
-void sig_handler(int signal);
+void* stats_signal_thread(void *arg);
 
 #endif
