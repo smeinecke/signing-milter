@@ -260,6 +260,17 @@ is security-sensitive. It talks to an MTA and has access to otherwise
 unprotected private keys. It must run at fixed low privilege. The
 .I signing-milter
 refuses to run with root privileges.
+.P
+When the auth-signing-table (\-a or \-R) is used, do not attach
+.I signing-milter
+to an Internet-facing MX listening on port 25.  Use it only on authenticated
+submission services, and combine it with Postfix
+.IR smtpd_sender_login_maps (5)
+and
+.I reject_authenticated_sender_login_mismatch
+so an authenticated client cannot use an envelope sender it does not own.
+Otherwise unauthorized senders may be able to obtain S/MIME signatures for
+addresses they do not control.
 .\"
 .SH ACCOUNTS
 You may start signing-milter as root. In this case

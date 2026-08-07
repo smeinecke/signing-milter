@@ -294,7 +294,14 @@ static int auth_signing_value_match(const char* val, size_t vlen, const char* si
         }
         if (toklen == 0)
             continue;
-        tok[toklen < sizeof(tok) - 1 ? toklen : sizeof(tok) - 1] = '\0';
+
+        if (toklen >= sizeof(tok)) {
+            logmsg(LOG_ERR, "dict_auth_signing_lookup: signer token too long");
+            free(buf);
+            return -1;
+        }
+
+        tok[toklen] = '\0';
 
         norm_ok = normalize_address_safe(tok, tok_norm, sizeof(tok_norm));
         if (!norm_ok) {
@@ -304,8 +311,8 @@ static int auth_signing_value_match(const char* val, size_t vlen, const char* si
         }
         if (tok_norm[0] != '\0' && strcmp(tok_norm, "<>") != 0 &&
             strcmp(tok_norm, signer_norm) == 0) {
+            /* keep scanning; an overlong later token must still fail closed */
             found = 1;
-            break;
         }
     }
 

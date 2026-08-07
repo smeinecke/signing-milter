@@ -530,7 +530,11 @@ int redis_auth_signing_lookup(const char* auth_identity, const char* signer_iden
             return -1;
         }
 
-        return r->integer;
+        {
+            int result = (int) r->integer;
+            freeReplyObject(r);
+            return result;
+        }
     }
 #endif
 }

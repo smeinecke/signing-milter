@@ -225,6 +225,34 @@ static void test_oversized_identity_fails_closed(void** state) {
     unlink(path);
 }
 
+static void test_oversized_token_in_cdb_value_fails_closed(void** state) {
+
+    (void) state;
+    char path[] = "/tmp/signing-milter-test-auth-XXXXXX";
+    char value_buf[2048];
+    size_t i;
+
+    /* build an auth table value with an overlong second signer token */
+    strcpy(value_buf, "sender@example.com,");
+    for (i = strlen(value_buf); i < sizeof(value_buf) - 1; i++)
+        value_buf[i] = 'a';
+    value_buf[i] = '\0';
+
+    assert_true(create_auth_cdb(path,
+                                "alice", value_buf,
+                                NULL) == 0);
+
+    opt_auth_signing_table = path;
+    opt_redis_auth_signing_table = 0;
+    dict_open(path, &dict_auth_signingtable);
+
+    /* the overlong token in the CDB value must make the lookup fail closed */
+    assert_int_equal(auth_signing_authorized("alice", "sender@example.com"), -1);
+
+    dict_close(&dict_auth_signingtable);
+    unlink(path);
+}
+
 static void test_normalize_address(void** state) {
 
     (void) state;
@@ -292,6 +320,7 @@ int main(void) {
         cmocka_unit_test(test_unauthorized_auth_identity),
         cmocka_unit_test(test_missing_auth_identity_is_denied),
         cmocka_unit_test(test_oversized_identity_fails_closed),
+        cmocka_unit_test(test_oversized_token_in_cdb_value_fails_closed),
         cmocka_unit_test(test_normalize_address),
         cmocka_unit_test(test_normalize_address_safe),
     };
