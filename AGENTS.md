@@ -25,8 +25,9 @@ ctest --test-dir build --output-on-failure
 ./tests/run-all.sh build
 ```
 
-`run-all.sh` runs ctest and then the milter integration suite. The integration
-suite needs `miltertest` installed.
+`run-all.sh` runs ctest and then the milter integration suite. The baseline
+integration suite needs `miltertest` installed. The auth-signing tests use
+`python3-miltertest`; the Redis variant also needs a local `redis-server`.
 
 ## Debian package
 

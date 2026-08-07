@@ -33,7 +33,9 @@ set(CTXDATA_SOURCES
 )
 
 set(UTILS_SOURCES
+    utils/address.c
     utils/append2buffer.c
+    utils/auth_signing.c
     utils/bio2file.c
     utils/break_after_semicolon.c
     utils/delete_marked_headers.c

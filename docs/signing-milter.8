@@ -42,6 +42,25 @@ does not exist.
 .\"
 .SH OPTIONS
 .TP
+.B \-a authsigningtable
+Enable the optional local CDB auth-signing table.
+.I authsigningtable
+is a
+.I cdb
+compiled database that maps an authenticated SMTP/SASL identity to one or more
+permitted signing identities.
+Each key (left side) is an authenticated identity; the value (right side) is a
+comma or whitespace separated list of signing identities.
+Email addresses are normalized (lower case, angle brackets removed) before
+lookup.
+When the auth-signing-table is configured, a message is only signed if the
+authenticated identity (taken from the libmilter macro
+.IR {auth_authen} )
+is authorized for the signing identity selected from the envelope sender or the
+.B X-Signer
+header (if \-f is enabled).
+Messages with an unauthorized or missing authentication identity are not signed.
+.TP
 .B \-h
 Show summary of options and exit.
 .TP
@@ -156,10 +175,20 @@ message will not be signed and simply pass unchanged.
 .RE
 .TP
 .B \-P prefix
-When using the Redis certificate backend (\-r), prepend the given
+When using the Redis certificate backend (\-r) or the Redis auth-signing table
+(\-R), prepend the given
 .I prefix
 to every Redis key. The default is
 .IR signing-milter: .
+.TP
+.B \-R
+Enable the optional Redis auth-signing table.  When enabled, the authenticated
+identity is looked up in Redis as a set of permitted signing identities under the
+key
+.IR <prefix>auth:<identity> .
+A message is only signed if the authenticated identity is a member of that set
+for the selected signing identity.
+This option requires \-r.
 .TP
 .B \-r uri
 Enable the optional Redis certificate backend. When enabled,

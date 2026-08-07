@@ -23,3 +23,11 @@ ctest --test-dir "$BUILD_DIR" --output-on-failure
 # Run the integration tests.
 echo "=== integration tests ==="
 "$SCRIPT_DIR/integration/run-miltertest.sh" "$BUILD_DIR"
+
+echo "=== auth-signing integration tests (local CDB) ==="
+"$SCRIPT_DIR/integration/run-miltertest-auth.sh" "$BUILD_DIR"
+
+if command -v redis-server >/dev/null 2>&1; then
+    echo "=== auth-signing integration tests (Redis) ==="
+    "$SCRIPT_DIR/integration/run-miltertest-auth-redis.sh" "$BUILD_DIR"
+fi

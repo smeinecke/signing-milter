@@ -1,8 +1,13 @@
 #include "usage.h"
 
+#include "auth_signing.h"
+
 void usage(void) {
     printf("\nUsage: %s [OPTIONS]\n", STR_PROGNAME);
     printf("Options are:\n");
+    printf("  -a authtable    optional CDB table that maps an authenticated SMTP\n");
+    printf("                  identity to the signing identities it is allowed to use\n");
+    printf("                  default: none\n");
     printf("  -h              show help and exit\n");
     printf("  -v              show version and exit\n");
     printf("  -c clientgroup  make a local socket accessible for clientgroup\n");
@@ -21,12 +26,15 @@ void usage(void) {
     printf("  -n modetable    full path to a lookuptable containing recipientaddresses\n");
     printf("                  for which the alternativ signingmode is enabled\n");
     printf("                  default: %s\n", opt_modetable);
-    printf("  -P prefix       Redis key prefix for certificate lookup\n");
+    printf("  -P prefix       Redis key prefix for certificate and auth-signing lookup\n");
     printf("                  default: %s\n", opt_redis_prefix);
     printf("  -r uri          Redis URI for dynamic certificate lookup\n");
     printf("                  - redis://[password@]host:port/db\n");
     printf("                  - unix:///path/to/redis.sock\n");
     printf("                  default: none\n");
+    printf("  -R              enable Redis-backed auth-signing table (requires -r)\n");
+    printf("                  uses the key prefix set with -P under the auth: namespace\n");
+    printf("                  default: off\n");
     printf("  -s socket       Milter socket in sendmail notation\n");
     printf("                  - unix|local:PATH\n");
     printf("                  - inet:PORT[@HOST]\n");

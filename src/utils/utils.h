@@ -7,6 +7,7 @@
 #include <syslog.h>
 
 #include "../signing-milter.h"
+#include "address.h"
 #include "redis.h"
 
 #define PHASE_PRE_SIGN	3

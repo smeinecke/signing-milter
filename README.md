@@ -95,7 +95,7 @@ redis-cli HMSET signing-milter:sender@example.com \
     chain "$(cat /path/to/sender-chain.pem)"
 ```
 
-To enable the Redis backend, add `-r`, optionally `-P` and `-W`, to
+To enable the Redis certificate backend, add `-r`, optionally `-P` and `-W`, to
 `/etc/default/signing-milter`:
 
 ```ini
@@ -105,6 +105,72 @@ OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfi
 The passphrase file is used for encrypted private keys loaded from Redis. When
 Redis is enabled, the milter queries Redis first; on a miss it falls back to the
 local CDB `signingtable`.
+
+## Optional auth-signing-table
+
+By default, `signing-milter` signs any message for which a matching signing
+key can be found.  Starting with this version, an optional
+`auth-signing-table` may be used to restrict which signing identities an
+authenticated SMTP/SASL user is allowed to use.
+
+The authenticated identity is read from the libmilter macro
+`{auth_authen}`.  The selected signing identity is checked both when it is
+taken from the envelope sender and when it is supplied via the `X-Signer`
+header (if `-f` is enabled).  If the authenticated identity is not authorized
+for the selected signing identity, the message is not signed.
+
+### Local CDB auth-signing-table
+
+Create a text file with one or more records per authenticated identity.  The
+key (left-hand side) is the authenticated identity and the value (right-hand
+side) is one or more signing identities, separated by commas or whitespace.
+Email addresses are normalized (lowercase and angle brackets removed) before
+lookup, so `<Sender@EXAMPLE.COM>` and `sender@example.com` are equivalent.
+
+```text
+alice@example.org    sender@example.com, sales@example.com
+bob@example.org      other@example.com
+```
+
+Compile the table with `cdb` and reference it with `-a`:
+
+```bash
+cdb -c -m /etc/signing-milter/authsigningtable.cdb /etc/signing-milter/authsigningtable
+OPTIONS="... -a /etc/signing-milter/authsigningtable.cdb"
+```
+
+### Redis auth-signing-table
+
+If Redis support is compiled in, the auth-signing-table can also be stored in
+Redis.  Keys are `<prefix>auth:<identity>` and contain a Redis set of
+permitted signing identities.  The default prefix is `signing-milter:`.
+
+```bash
+redis-cli SADD signing-milter:auth:alice@example.org sender@example.com
+redis-cli SADD signing-milter:auth:alice@example.org sales@example.com
+redis-cli SADD signing-milter:auth:bob@example.org  other@example.com
+```
+
+Enable it with `-R` together with the Redis URI and optional prefix:
+
+```ini
+OPTIONS="... -R -r redis://127.0.0.1:6379/0 -P signing-milter:"
+```
+
+### Postfix configuration for authenticated submission
+
+To make sure the milter sees the authenticated identity, attach it to the
+submission service used by authenticated clients:
+
+```ini
+smtpd_milters = unix:/var/spool/postfix/signing-milter/signing-milter.sock
+
+submission inet n       -       y       -       -       smtpd
+  -o syslog_name=postfix/submission
+  -o smtpd_tls_security_level=encrypt
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_milters=${smtpd_milters}
+```
 
 ## Build from source with or without Redis
 

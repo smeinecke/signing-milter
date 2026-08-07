@@ -14,6 +14,11 @@
 int opt_loglevel = LOG_NOTICE;
 int opt_logdest  = LOG_DEST_STDOUT;
 
+/* Redis configuration globals referenced by redis.c. */
+const char* opt_redis_uri = NULL;
+const char* opt_redis_prefix = "signing-milter:";
+const char* opt_redis_passphrase = NULL;
+
 /* Global dictionaries referenced by dict_cdb.c. */
 struct DICT dict_signingtable = {
     "signingtable",

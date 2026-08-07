@@ -33,4 +33,15 @@ extern int redis_lookup_cert(const char* raw_address,
                              char** pem, size_t* pem_len,
                              char** chain, size_t* chain_len);
 
+/*
+ * Look up an authenticated identity in Redis and check whether it is permitted
+ * to use the given signer identity.  The lookup uses a Redis set at
+ * <prefix>auth:<auth_identity> whose members are permitted signer identities.
+ * All comparisons are case-insensitive and strip surrounding angle brackets.
+ *
+ * Returns 1 if authorized, 0 if not, -1 on Redis error.
+ */
+extern int redis_auth_signing_lookup(const char* auth_identity,
+                                     const char* signer_identity);
+
 #endif

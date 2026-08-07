@@ -1,6 +1,7 @@
 #include <unistd.h>
 
 #include "main.h"
+#include "utils/auth_signing.h"
 
 /* set default values */
 const char* opt_clientgroup  = NULL;
@@ -73,8 +74,11 @@ int main(int argc, char** argv) {
      */
     client_gid = 0;
 
-    while ((c = getopt(argc, argv, "bc:d:hfg:k:lm:n:P:r:s:t:u:vxW:")) > 0) {
+    while ((c = getopt(argc, argv, "a:bc:d:hfg:k:lm:n:P:Rr:s:t:u:vxW:")) > 0) {
         switch (c) {
+        case 'a': /* auth-signing table CDB filename */
+            opt_auth_signing_table = optarg;
+            break;
         case 'b': /* break contentheader */
             logmsg(LOG_INFO, "option -b is ignored for compatibily reasons, you may remove it safely");
             break;
@@ -138,6 +142,9 @@ int main(int argc, char** argv) {
             break;
         case 'P': /* Redis key prefix */
             opt_redis_prefix = optarg;
+            break;
+        case 'R': /* Redis auth-signing table */
+            opt_redis_auth_signing_table = 1;
             break;
         case 'r': /* Redis URI */
             opt_redis_uri = optarg;
@@ -204,6 +211,22 @@ int main(int argc, char** argv) {
             usage();
             exit(EX_USAGE);
         }
+    }
+
+    if (opt_redis_auth_signing_table) {
+#ifndef WITH_REDIS
+        logmsg(LOG_ERR, "Redis auth-signing table requested but Redis support is not compiled in");
+        exit(EX_SOFTWARE);
+#else
+        if (opt_redis_uri == NULL || *opt_redis_uri == '\0') {
+            logmsg(LOG_ERR, "Redis auth-signing table requires a Redis URI (-r)");
+            exit(EX_DATAERR);
+        }
+#endif
+    }
+
+    if (opt_auth_signing_table != NULL && opt_redis_auth_signing_table) {
+        logmsg(LOG_WARNING, "both local (-a) and Redis (-R) auth-signing tables configured; using local table");
     }
 
     /* open syslog */
@@ -380,6 +403,9 @@ int main(int argc, char** argv) {
     if (opt_modetable)
         dict_open(opt_modetable, &dict_modetable);
 
+    if (opt_auth_signing_table)
+        dict_open(opt_auth_signing_table, &dict_auth_signingtable);
+
     if (redis_global_init() < 0)
         exit(EX_SOFTWARE);
 
@@ -438,6 +464,8 @@ int main(int argc, char** argv) {
     dict_close(&dict_signingtable);
     if (opt_modetable)
         dict_close(&dict_modetable);
+    if (opt_auth_signing_table)
+        dict_close(&dict_auth_signingtable);
 
     /* cleanup OpenSSL */
     ERR_free_strings();

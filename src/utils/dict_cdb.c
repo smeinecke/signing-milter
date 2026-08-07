@@ -1,6 +1,9 @@
 #include "dict_cdb.h"
 
+#include <ctype.h>
 #include <pthread.h>
+
+#include "address.h"
 
 static pthread_mutex_t dict_global_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -242,6 +245,143 @@ const char* dict_lookup(DICT* dict, const char* key) {
     pthread_mutex_unlock(&dict_global_lock);
     return (dict->result);
 
+}
+
+/*
+ * Tokenize a CDB auth table value and check whether it contains the normalized
+ * signer identity.  A single record may contain a list delimited by commas
+ * and/or whitespace.  Each token is normalized before comparison.
+ */
+static int auth_signing_value_match(const char* val, size_t vlen, const char* signer_norm) {
+
+    char*  buf;
+    char*  p;
+    char*  end;
+    size_t toklen;
+    char   tok[DICT_BUFFER_LEN];
+    char   tok_norm[DICT_BUFFER_LEN];
+    int    found = 0;
+
+    if (vlen == 0)
+        return 0;
+
+    if ((buf = malloc(vlen + 1)) == NULL) {
+        logmsg(LOG_ERR, "dict_auth_signing_lookup: malloc(value) failed");
+        return -1;
+    }
+    memcpy(buf, val, vlen);
+    buf[vlen] = '\0';
+
+    p = buf;
+    end = buf + vlen;
+    while (p < end) {
+        /* skip leading delimiters */
+        while (p < end && (isspace((unsigned char) *p) || *p == ','))
+            p++;
+        if (p >= end)
+            break;
+
+        toklen = 0;
+        while (p < end && !isspace((unsigned char) *p) && *p != ',') {
+            if (toklen < sizeof(tok) - 1)
+                tok[toklen] = *p;
+            toklen++;
+            p++;
+        }
+        if (toklen == 0)
+            continue;
+        tok[toklen < sizeof(tok) - 1 ? toklen : sizeof(tok) - 1] = '\0';
+
+        normalize_address(tok, tok_norm, sizeof(tok_norm));
+        if (tok_norm[0] != '\0' && strcmp(tok_norm, "<>") != 0 &&
+            strcmp(tok_norm, signer_norm) == 0) {
+            found = 1;
+            break;
+        }
+    }
+
+    free(buf);
+    return found;
+}
+
+int dict_auth_signing_lookup(DICT* dict, const char* auth_raw, const char* signer_raw) {
+
+    size_t         keylen;
+    struct cdb_find cdbfp;
+    int            status;
+    int            found = 0;
+    char*          val = NULL;
+    char           signer_norm[DICT_BUFFER_LEN];
+
+    if (dict == NULL || dict->stat_fd < 0 || dict->buffer == NULL ||
+        auth_raw == NULL || *auth_raw == '\0' ||
+        signer_raw == NULL || *signer_raw == '\0')
+        return 0;
+
+    pthread_mutex_lock(&dict_global_lock);
+
+    if (dict->stat_fd < 0 || dict->buffer == NULL) {
+        pthread_mutex_unlock(&dict_global_lock);
+        return 0;
+    }
+
+    normalize_address(auth_raw, dict->buffer, DICT_BUFFER_LEN);
+    if (dict->buffer[0] == '\0' || strcmp(dict->buffer, "<>") == 0) {
+        pthread_mutex_unlock(&dict_global_lock);
+        return 0;
+    }
+    keylen = strlen(dict->buffer);
+
+    normalize_address(signer_raw, signer_norm, sizeof(signer_norm));
+    if (signer_norm[0] == '\0' || strcmp(signer_norm, "<>") == 0) {
+        pthread_mutex_unlock(&dict_global_lock);
+        return 0;
+    }
+
+    if (cdb_findinit(&cdbfp, &dict->cdb, dict->buffer, keylen) < 0) {
+        logmsg(LOG_ERR, "dict_auth_signing_lookup: cdb_findinit error for %s", auth_raw);
+        pthread_mutex_unlock(&dict_global_lock);
+        return -1;
+    }
+
+    while ((status = cdb_findnext(&cdbfp)) > 0) {
+        unsigned vlen = cdb_datalen(&dict->cdb);
+
+        if (vlen == 0)
+            continue;
+
+        if ((val = malloc(vlen + 1)) == NULL) {
+            logmsg(LOG_ERR, "dict_auth_signing_lookup: malloc(value) failed");
+            status = -1;
+            break;
+        }
+
+        if (cdb_read(&dict->cdb, val, vlen, cdb_datapos(&dict->cdb)) < 0) {
+            logmsg(LOG_ERR, "dict_auth_signing_lookup: cdb_read error for %s", auth_raw);
+            free(val);
+            val = NULL;
+            status = -1;
+            break;
+        }
+        val[vlen] = '\0';
+
+        status = auth_signing_value_match(val, vlen, signer_norm);
+        free(val);
+        val = NULL;
+        if (status == 1) {
+            found = 1;
+            break;
+        }
+        if (status < 0)
+            break;
+    }
+
+    pthread_mutex_unlock(&dict_global_lock);
+
+    if (status < 0)
+        return -1;
+
+    return found;
 }
 
 void dict_close(DICT* dict) {

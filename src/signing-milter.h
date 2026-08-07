@@ -77,6 +77,7 @@ struct ctxdata {
     const char*     queueid;
     int             first_bodychunk_seen;
     const char*     keepdir;
+    char*           auth_identity;
 };
 #define CTXDATA struct ctxdata
 

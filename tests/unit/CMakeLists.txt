@@ -10,6 +10,10 @@ include_directories(
     ${CMOCKA_INCLUDE_DIRS}
 )
 
+if(WITH_REDIS)
+    include_directories(${HIREDIS_INCLUDE_DIRS})
+endif()
+
 add_library(test_stubs OBJECT test_stubs.c)
 
 # Helper to build a unit test against the source files it exercises.
@@ -33,13 +37,18 @@ function(add_unit_test TEST_NAME)
         ${CMOCKA_CFLAGS_OTHER}
     )
 
-    target_link_libraries(${TEST_NAME} PRIVATE
+    set(TEST_LINK_LIBRARIES
         ${CMOCKA_LIBRARIES}
         ${LIBCDB_LIBRARIES}
         ${OPENSSL_LIBRARIES}
         ${LIBMILTER_LIBRARY}
         Threads::Threads
     )
+    if(WITH_REDIS)
+        list(APPEND TEST_LINK_LIBRARIES ${HIREDIS_LIBRARIES})
+    endif()
+
+    target_link_libraries(${TEST_NAME} PRIVATE ${TEST_LINK_LIBRARIES})
 
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 endfunction()
@@ -52,5 +61,6 @@ add_unit_test(test_break_after_semicolon       src/utils/break_after_semicolon.c
 add_unit_test(test_separate_header             src/utils/separate_header.c)
 add_unit_test(test_append2buffer               src/utils/append2buffer.c)
 add_unit_test(test_ctxdata                     src/ctxdata/create.c src/ctxdata/free.c src/ctxdata/cleanup.c)
-add_unit_test(test_dict_cdb                    src/utils/dict_cdb.c src/utils/lowercase.c)
+add_unit_test(test_dict_cdb                    src/utils/dict_cdb.c src/utils/address.c src/utils/lowercase.c)
+add_unit_test(test_auth_signing                src/utils/auth_signing.c src/utils/dict_cdb.c src/utils/address.c src/utils/redis.c src/utils/lowercase.c)
 add_unit_test(test_validate_pem_permissions    src/utils/validate_pem_permissions.c)

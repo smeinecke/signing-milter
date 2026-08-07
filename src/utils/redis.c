@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "address.h"
 #include "utils.h"
 
 extern const char* opt_redis_uri;
@@ -299,33 +300,6 @@ static redisContext* redis_get_ctx(void) {
 
 #endif /* WITH_REDIS */
 
-static void normalize_address(const char* raw, char* out, size_t out_len) {
-    size_t len;
-    const char* src = raw;
-
-    if (raw == NULL || out_len == 0)
-        return;
-
-    *out = '\0';
-    len = strlen(raw);
-    if (*src == '<' && len >= 2 && src[len - 1] == '>') {
-        src++;
-        len -= 2;
-    }
-
-    if (len == 0) {
-        memcpy(out, "<>", 3);
-        return;
-    }
-
-    if (len >= out_len)
-        len = out_len - 1;
-
-    memcpy(out, src, len);
-    out[len] = '\0';
-    lowercase(out);
-}
-
 int redis_global_init(void) {
     int rc;
 
@@ -482,6 +456,97 @@ int redis_lookup_cert(const char* raw_address,
         *chain = chain_tmp;
         *chain_len = chain_tmp ? strlen(chain_tmp) : 0;
         return 0;
+    }
+#endif
+}
+
+int redis_auth_signing_lookup(const char* auth_identity, const char* signer_identity) {
+
+    if (auth_identity == NULL || *auth_identity == '\0' ||
+        signer_identity == NULL || *signer_identity == '\0')
+        return 0;
+
+#ifndef WITH_REDIS
+    (void) auth_identity;
+    (void) signer_identity;
+    return 0;
+#else
+    {
+        char        norm[REDIS_KEY_MAX];
+        char        key[REDIS_KEY_MAX];
+        const char* prefix = opt_redis_prefix ? opt_redis_prefix : "signing-milter:";
+        redisContext* c;
+        redisReply* r;
+        size_t      i;
+        int         found = 0;
+
+        if (!redis_enabled)
+            return 0;
+
+        normalize_address(auth_identity, norm, sizeof(norm));
+        if (norm[0] == '\0' || strcmp(norm, "<>") == 0)
+            return 0;
+
+        if (snprintf(key, sizeof(key), "%sauth:%s", prefix, norm) >= (int) sizeof(key)) {
+            logmsg(LOG_ERR, "redis: auth key too long for %s", auth_identity);
+            return -1;
+        }
+
+        c = redis_get_ctx();
+        if (c == NULL)
+            return -1;
+
+        r = redisCommand(c, "SMEMBERS %s", key);
+        if (r == NULL || c->err) {
+            logmsg(LOG_ERR, "redis: SMEMBERS failed: %s",
+                   c->err ? c->errstr : "no reply");
+            if (r != NULL)
+                freeReplyObject(r);
+
+            /* try to reconnect once */
+            redisFree(c);
+            c = redis_do_connect();
+            if (c == NULL) {
+                (void) pthread_setspecific(redis_tls, NULL);
+                return -1;
+            }
+            if (pthread_setspecific(redis_tls, c) != 0) {
+                logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(errno));
+                redisFree(c);
+                return -1;
+            }
+            r = redisCommand(c, "SMEMBERS %s", key);
+            if (r == NULL || c->err) {
+                logmsg(LOG_ERR, "redis: SMEMBERS failed after reconnect: %s",
+                       c->err ? c->errstr : "no reply");
+                if (r != NULL)
+                    freeReplyObject(r);
+                return -1;
+            }
+        }
+
+        if (r->type != REDIS_REPLY_ARRAY) {
+            logmsg(LOG_ERR, "redis: unexpected reply type %d", r->type);
+            freeReplyObject(r);
+            return -1;
+        }
+
+        for (i = 0; i < r->elements; i++) {
+            char mem_norm[REDIS_KEY_MAX];
+
+            if (r->element[i]->type != REDIS_REPLY_STRING || r->element[i]->len == 0)
+                continue;
+
+            normalize_address(r->element[i]->str, mem_norm, sizeof(mem_norm));
+            if (mem_norm[0] != '\0' && strcmp(mem_norm, "<>") != 0 &&
+                strcmp(mem_norm, signer_identity) == 0) {
+                found = 1;
+                break;
+            }
+        }
+
+        freeReplyObject(r);
+        return found;
     }
 #endif
 }

@@ -6,6 +6,7 @@
 #include "../signing-milter.h"
 
 extern void ctxdata_cleanup(CTXDATA* ctxdata);
+extern void ctxdata_reset_cert(CTXDATA* ctxdata);
 extern CTXDATA* ctxdata_create(void);
 extern void ctxdata_free(CTXDATA* ctxdata);
 extern int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename);

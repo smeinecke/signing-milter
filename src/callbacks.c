@@ -1,5 +1,30 @@
 #include "callbacks.h"
 
+#include "auth_signing.h"
+
+static char* get_auth_identity(SMFICTX* ctx) {
+
+    const char* raw;
+    char*       out;
+    size_t      len;
+
+    raw = smfi_getsymval(ctx, "{auth_authen}");
+    if (raw == NULL || *raw == '\0')
+        return NULL;
+
+    len = strlen(raw);
+    out = malloc(len + 1);
+    if (out == NULL)
+        return NULL;
+
+    normalize_address(raw, out, len + 1);
+    if (out[0] == '\0' || strcmp(out, "<>") == 0) {
+        free(out);
+        return NULL;
+    }
+    return out;
+}
+
 struct smfiDesc callbacks = {
     STR_PROGNAME,           /* filter name */
     SMFI_VERSION,           /* version code -- do not change */
@@ -39,6 +64,10 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
     CTXDATA*       ctxdata;
     const char*    daemon_name;
     int            i;
+    int            auth_rc;
+    int            auth_configured;
+    char*          auth_identity = NULL;
+    char           signer_norm[DICT_BUFFER_LEN];
 
     char*          redis_pem = NULL;
     size_t         redis_pem_len = 0;
@@ -59,6 +88,8 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
      */
     logmsg(LOG_DEBUG, "MAIL FROM: '%s' (via %s)", argv[0], daemon_name);
 
+    auth_configured = (opt_auth_signing_table != NULL) || opt_redis_auth_signing_table;
+
     dict_reload(&dict_signingtable);
 
     if (opt_redis_uri != NULL && *opt_redis_uri != '\0') {
@@ -74,7 +105,7 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
         if (pemfilename == NULL || *pemfilename == '\0') {
             /*
              * Sender not found in the signing table.
-             * No further action needed.
+             * No further action needed unless X-Signer may provide one.
              */
             if (opt_signerfromheader) {
                 logmsg(LOG_DEBUG, "no cert for envsender, will look for '%s'", HEADERNAME_SIGNER);
@@ -85,6 +116,9 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
         }
     }
 
+    if (auth_configured)
+        auth_identity = get_auth_identity(ctx);
+
     /*
      * Prepare the private data structure
      */
@@ -93,21 +127,56 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
         logmsg(LOG_WARNING, "callback_envfrom: REUSED CONNECTION !!!!");
         ctxdata_cleanup(ctxdata);
     } else {
-        if ((ctxdata = ctxdata_create()) == NULL)
-            return SMFIS_TEMPFAIL;
-    }
-
-    if (redis_found) {
-        logmsg(LOG_INFO, "signingdata from redis for envsender '%s'", argv[0]);
-        if ((i = ctxdata_setup_from_redis(ctxdata, argv[0], redis_pem, redis_pem_len, redis_chain, redis_chain_len, opt_redis_passphrase)) != 0) {
-            logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup_from_redis() failed: rc=%i, envsender='%s'", i, argv[0]);
+        if ((ctxdata = ctxdata_create()) == NULL) {
+            free(auth_identity);
+            free(redis_pem);
+            free(redis_chain);
             return SMFIS_TEMPFAIL;
         }
-    } else if (pemfilename != NULL && *pemfilename != '\0') {
-        logmsg(LOG_INFO, "signingdata from envsender '%s'", argv[0]);
-        if ((i = ctxdata_setup(ctxdata, pemfilename)) != 0) {
-            logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup() failed: rc=%i, envsender='%s', file=%s", i, argv[0], pemfilename);
+    }
+
+    ctxdata->auth_identity = auth_identity;
+
+    if (redis_found || (pemfilename != NULL && *pemfilename != '\0')) {
+        normalize_address(argv[0], signer_norm, sizeof(signer_norm));
+        auth_rc = auth_signing_authorized(ctxdata->auth_identity, signer_norm);
+        if (auth_rc == -1) {
+            logmsg(LOG_ERR, "callback_envfrom: auth_signing_authorized() failed");
+            ctxdata_cleanup(ctxdata);
+            ctxdata_free(ctxdata);
+            smfi_setpriv(ctx, NULL);
+            free(redis_pem);
+            free(redis_chain);
             return SMFIS_TEMPFAIL;
+        }
+        if (auth_rc == 0) {
+            logmsg(LOG_INFO, "callback_envfrom: authenticated identity '%s' not authorized for signer '%s'",
+                   ctxdata->auth_identity ? ctxdata->auth_identity : "(none)", signer_norm);
+            if (!opt_signerfromheader) {
+                ctxdata_cleanup(ctxdata);
+                ctxdata_free(ctxdata);
+                smfi_setpriv(ctx, NULL);
+                free(redis_pem);
+                free(redis_chain);
+                return SMFIS_ACCEPT;
+            }
+            /* otherwise leave ctxdata empty and wait for X-Signer */
+            free(redis_pem);
+            redis_pem = NULL;
+            free(redis_chain);
+            redis_chain = NULL;
+        } else if (redis_found) {
+            logmsg(LOG_INFO, "signingdata from redis for envsender '%s'", argv[0]);
+            if ((i = ctxdata_setup_from_redis(ctxdata, argv[0], redis_pem, redis_pem_len, redis_chain, redis_chain_len, opt_redis_passphrase)) != 0) {
+                logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup_from_redis() failed: rc=%i, envsender='%s'", i, argv[0]);
+                return SMFIS_TEMPFAIL;
+            }
+        } else {
+            logmsg(LOG_INFO, "signingdata from envsender '%s'", argv[0]);
+            if ((i = ctxdata_setup(ctxdata, pemfilename)) != 0) {
+                logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup() failed: rc=%i, envsender='%s', file=%s", i, argv[0], pemfilename);
+                return SMFIS_TEMPFAIL;
+            }
         }
     }
 
@@ -116,6 +185,8 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
      */
     if (smfi_setpriv(ctx, ctxdata) != MI_SUCCESS) {
         logmsg(LOG_ERR, "error: callback_envfrom: setpriv failed, envsender='%s'", argv[0]);
+        ctxdata_cleanup(ctxdata);
+        ctxdata_free(ctxdata);
         return SMFIS_TEMPFAIL;
     }
 
@@ -245,8 +316,13 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         char*          redis_chain = NULL;
         size_t         redis_chain_len = 0;
         int            redis_found = 0;
+        int            auth_rc;
+        int            auth_configured;
+        char           signer_norm[DICT_BUFFER_LEN];
 
         logmsg(LOG_DEBUG, "callback_header: signerfrom_header: %s", headerv);
+
+        auth_configured = (opt_auth_signing_table != NULL) || opt_redis_auth_signing_table;
 
         dict_reload(&dict_signingtable);
 
@@ -263,20 +339,47 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
             if (pemfilename == NULL || *pemfilename == '\0') {
                 /*
                  * Sender not found in the signing table.
-                 * No further action needed.
+                 * No signing with this X-Signer.
                  */
                 logmsg(LOG_INFO, "no signingdata for %s", headerv);
+                if (auth_configured) {
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER | MF_SKIP_SIGNING;
+                    return SMFIS_CONTINUE;
+                }
                 return SMFIS_ACCEPT;
+            }
+        }
+
+        if (auth_configured) {
+            normalize_address(headerv, signer_norm, sizeof(signer_norm));
+            auth_rc = auth_signing_authorized(ctxdata->auth_identity, signer_norm);
+            if (auth_rc == -1) {
+                logmsg(LOG_ERR, "callback_header: auth_signing_authorized() failed");
+                free(redis_pem);
+                free(redis_chain);
+                return SMFIS_TEMPFAIL;
+            }
+            if (auth_rc == 0) {
+                logmsg(LOG_INFO, "callback_header: X-Signer '%s' not authorized for authenticated identity '%s'",
+                       headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER | MF_SKIP_SIGNING;
+                free(redis_pem);
+                free(redis_chain);
+                return SMFIS_CONTINUE;
             }
         }
 
         if (redis_found) {
             logmsg(LOG_INFO, "signingdata from redis for header signer '%s'", headerv);
+            if (ctxdata->pemfilename != NULL || ctxdata->cert != NULL)
+                ctxdata_reset_cert(ctxdata);
             if ((i = ctxdata_setup_from_redis(ctxdata, headerv, redis_pem, redis_pem_len, redis_chain, redis_chain_len, opt_redis_passphrase)) != 0) {
                 logmsg(LOG_ERR, "callback_header: ctxdata_setup_from_redis() failed: rc=%i, headerf=%s, headerv=%s", i, headerf, headerv);
                 return SMFIS_TEMPFAIL;
             }
         } else {
+            if (ctxdata->pemfilename != NULL || ctxdata->cert != NULL)
+                ctxdata_reset_cert(ctxdata);
             if ((i = ctxdata_setup(ctxdata, pemfilename)) != 0) {
                 logmsg(LOG_ERR, "callback_header: ctxdata_setup() failed: rc=%i, headerf=%s, headerv=%s, file=%s", i, headerf, headerv, pemfilename);
                 return SMFIS_TEMPFAIL;
@@ -441,6 +544,11 @@ sfsistat callback_eom(SMFICTX* ctx) {
     }
 
     if (ctxdata->mailflags & MF_SKIP_SIGNING) {
+        if (ctxdata->mailflags & MF_SIGNER_FROM_HEADER) {
+            if (smfi_chgheader(ctx, HEADERNAME_SIGNER, 0, NULL) != MI_SUCCESS) {
+                logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SIGNER);
+            }
+        }
         if (smfi_chgheader(ctx, HEADERNAME_SKIP_SIGNING, 0, NULL) != MI_SUCCESS) {
             logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SKIP_SIGNING);
         }
