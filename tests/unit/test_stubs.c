@@ -27,8 +27,6 @@ struct DICT dict_signingtable = {
     0,
     CDB_STATIC_INIT,
     NULL,
-    NULL,
-    0,
     NULL
 };
 
@@ -39,8 +37,6 @@ struct DICT dict_modetable = {
     0,
     CDB_STATIC_INIT,
     NULL,
-    NULL,
-    0,
     NULL
 };
 

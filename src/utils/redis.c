@@ -108,7 +108,7 @@ static int redis_parse_uri(const char* uri) {
         if (strncmp(p, "//", 2) == 0)
             p += 2;
     } else {
-        logmsg(LOG_ERR, "redis: unsupported URI scheme in %s", opt_redis_uri);
+        logmsg(LOG_ERR, "redis: unsupported URI scheme (URI redacted)");
         free(work);
         return -1;
     }
@@ -200,7 +200,7 @@ static int redis_parse_uri(const char* uri) {
     }
 
     if (*g_uri.host == '\0' && !g_uri.is_unix) {
-        logmsg(LOG_ERR, "redis: empty host in URI %s", opt_redis_uri);
+        logmsg(LOG_ERR, "redis: empty host in URI (URI redacted)");
         free(work);
         return -1;
     }
@@ -282,8 +282,15 @@ static redisContext* redis_get_ctx(void) {
     if (c != NULL && c->err == 0)
         return c;
 
-    if (c != NULL)
+    if (c != NULL) {
+        /*
+         * Clear the TLS slot *before* freeing, otherwise a concurrent or
+         * subsequent caller could retrieve the freed pointer if
+         * redis_do_connect() fails below.
+         */
+        (void) pthread_setspecific(redis_tls, NULL);
         redisFree(c);
+    }
 
     c = redis_do_connect();
     if (c == NULL)
@@ -296,6 +303,34 @@ static redisContext* redis_get_ctx(void) {
     }
 
     return c;
+}
+
+/*
+ * Safely clear the per-thread Redis context.  Used by the explicit reconnect
+ * paths in redis_lookup_cert() and redis_auth_signing_lookup() so the TLS
+ * slot never points at a context that is about to be freed.
+ */
+static void redis_tls_clear_ctx(redisContext* c) {
+    redisContext* current = pthread_getspecific(redis_tls);
+
+    if (current == c)
+        (void) pthread_setspecific(redis_tls, NULL);
+
+    if (c != NULL)
+        redisFree(c);
+}
+
+/*
+ * Install a newly created Redis context in the TLS slot.  On failure the
+ * context is freed and the slot remains clear.
+ */
+static int redis_tls_set_ctx(redisContext* c) {
+    if (pthread_setspecific(redis_tls, c) != 0) {
+        logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(errno));
+        redisFree(c);
+        return -1;
+    }
+    return 0;
 }
 
 #endif /* WITH_REDIS */
@@ -315,6 +350,14 @@ int redis_global_init(void) {
     rc = redis_parse_uri(opt_redis_uri);
     if (rc < 0)
         return -1;
+
+    if (!g_uri.is_unix && g_uri.host != NULL) {
+        logmsg(LOG_WARNING,
+               "redis: using unencrypted TCP (redis://). "
+               "Credentials, private keys and certificate data will be "
+               "transmitted in plaintext. Prefer a Unix-domain socket when "
+               "possible.");
+    }
 
     if (g_uri.is_unix) {
         logmsg(LOG_INFO, "redis: initialized for unix socket %s", g_uri.unix_socket);
@@ -393,17 +436,12 @@ int redis_lookup_cert(const char* raw_address,
                 freeReplyObject(r);
 
             /* try to reconnect once */
-            redisFree(c);
+            redis_tls_clear_ctx(c);
             c = redis_do_connect();
-            if (c == NULL) {
-                (void) pthread_setspecific(redis_tls, NULL);
+            if (c == NULL)
                 return -1;
-            }
-            if (pthread_setspecific(redis_tls, c) != 0) {
-                logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(errno));
-                redisFree(c);
+            if (redis_tls_set_ctx(c) != 0)
                 return -1;
-            }
             r = redisCommand(c, "HMGET %s pem chain", key);
             if (r == NULL || c->err) {
                 logmsg(LOG_ERR, "redis: HMGET failed after reconnect: %s",
@@ -421,6 +459,11 @@ int redis_lookup_cert(const char* raw_address,
         }
 
         if (r->element[0]->type == REDIS_REPLY_STRING && r->element[0]->len > 0) {
+            if ((size_t) r->element[0]->len > MAX_REDIS_PEM_SIZE) {
+                logmsg(LOG_ERR, "redis: pem value too large for %s", raw_address);
+                freeReplyObject(r);
+                return -1;
+            }
             pem_tmp = malloc(r->element[0]->len + 1);
             if (pem_tmp == NULL) {
                 logmsg(LOG_ERR, "redis: malloc(pem) failed: %s", strerror(errno));
@@ -433,6 +476,12 @@ int redis_lookup_cert(const char* raw_address,
 
         if (pem_tmp != NULL &&
             r->element[1]->type == REDIS_REPLY_STRING && r->element[1]->len > 0) {
+            if ((size_t) r->element[1]->len > MAX_REDIS_CHAIN_SIZE) {
+                logmsg(LOG_ERR, "redis: chain value too large for %s", raw_address);
+                free(pem_tmp);
+                freeReplyObject(r);
+                return -1;
+            }
             chain_tmp = malloc(r->element[1]->len + 1);
             if (chain_tmp == NULL) {
                 logmsg(LOG_ERR, "redis: malloc(chain) failed: %s", strerror(errno));
@@ -503,17 +552,12 @@ int redis_auth_signing_lookup(const char* auth_identity, const char* signer_iden
                 freeReplyObject(r);
 
             /* try to reconnect once */
-            redisFree(c);
+            redis_tls_clear_ctx(c);
             c = redis_do_connect();
-            if (c == NULL) {
-                (void) pthread_setspecific(redis_tls, NULL);
+            if (c == NULL)
                 return -1;
-            }
-            if (pthread_setspecific(redis_tls, c) != 0) {
-                logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(errno));
-                redisFree(c);
+            if (redis_tls_set_ctx(c) != 0)
                 return -1;
-            }
             r = redisCommand(c, "SISMEMBER %s %s", key, signer_identity);
             if (r == NULL || c->err) {
                 logmsg(LOG_ERR, "redis: SISMEMBER failed after reconnect: %s",

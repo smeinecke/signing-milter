@@ -8,6 +8,9 @@ WorkingDirectory=/etc/signing-milter
 ExecStart=/usr/sbin/signing-milter $OPTIONS
 Restart=on-failure
 Type=simple
+UMask=0077
+PrivateTmp=yes
+ProtectHome=yes
 
 [Install]
 WantedBy=multi-user.target

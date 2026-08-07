@@ -19,8 +19,6 @@ struct DICT dict_auth_signingtable = {
     0,                   /* mtime      */
     CDB_STATIC_INIT,     /* cdb        */
     NULL,                /* buffer     */
-    NULL,                /* result     */
-    0,                   /* result_len */
     NULL                 /* cdb_path   */
 };
 

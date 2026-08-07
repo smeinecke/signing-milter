@@ -37,8 +37,6 @@ struct DICT dict_signingtable = {
     0,                   /* mtime      */
     CDB_STATIC_INIT,     /* cdb        */
     NULL,                /* buffer     */
-    NULL,                /* result     */
-    0,                   /* result_len */
     NULL                 /* cdb_path   */
 };
 struct DICT dict_modetable = {
@@ -48,8 +46,6 @@ struct DICT dict_modetable = {
     0,                   /* mtime      */
     CDB_STATIC_INIT,     /* cdb        */
     NULL,                /* buffer     */
-    NULL,                /* result     */
-    0,                   /* result_len */
     NULL                 /* cdb_path   */
 };
 
@@ -325,8 +321,9 @@ int main(int argc, char** argv) {
         socket_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
         socket_mode_str = "0660";
         if ((opt_clientgroup != NULL) && strcmp(opt_clientgroup, ":relax") == 0) {
-          socket_mode = socket_mode | S_IROTH | S_IWOTH;
-          socket_mode_str = "0666";
+            logmsg(LOG_WARNING, "clientgroup :relax selected: the milter socket will be world-writable (0666)");
+            socket_mode = socket_mode | S_IROTH | S_IWOTH;
+            socket_mode_str = "0666";
         }
 
         if (chmod(p, socket_mode) != 0) {
@@ -344,6 +341,16 @@ int main(int argc, char** argv) {
     }
     if (setgroups(0, NULL) != 0) {
         if (errno == EPERM) {
+            /*
+             * EPERM can happen when the process is not running as root or
+             * lacks CAP_SETGID.  When started as root we must not keep any
+             * supplementary groups; in non-root test/development mode we
+             * tolerate the ones the invoking user already has.
+             */
+            if (getuid() == 0 && getgroups(0, NULL) > 0) {
+                logmsg(LOG_ERR, "setgroups(0, NULL) not permitted and supplementary groups remain");
+                exit(EX_SOFTWARE);
+            }
             logmsg(LOG_INFO, "setgroups(0, NULL) not permitted, continuing");
         } else {
             logmsg(LOG_ERR, "setgroups(0, NULL) failed: %s", strerror(errno));

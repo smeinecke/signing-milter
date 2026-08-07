@@ -39,13 +39,19 @@ static void test_open_lookup_close(void** state) {
 
     dict_open(path, &dict);
 
-    const char* result = dict_lookup(&dict, "<sender@example.com>");
+    char result[DICT_BUFFER_LEN];
+    int rc;
+
+    rc = dict_lookup(&dict, "<sender@example.com>", result, sizeof(result));
+    assert_int_equal(rc, 1);
     assert_string_equal(result, "/etc/signing-milter/test.pem");
 
-    result = dict_lookup(&dict, "<recipient@example.com>");
+    rc = dict_lookup(&dict, "<recipient@example.com>", result, sizeof(result));
+    assert_int_equal(rc, 1);
     assert_string_equal(result, "/etc/signing-milter/other.pem");
 
-    result = dict_lookup(&dict, "<unknown@example.com>");
+    rc = dict_lookup(&dict, "<unknown@example.com>", result, sizeof(result));
+    assert_int_equal(rc, 0);
     assert_string_equal(result, "");
 
     dict_close(&dict);
@@ -73,7 +79,11 @@ static void test_lookup_lowercase(void** state) {
 
     dict_open(path, &dict);
 
-    const char* result = dict_lookup(&dict, "<SENDER@EXAMPLE.COM>");
+    char result[DICT_BUFFER_LEN];
+    int rc;
+
+    rc = dict_lookup(&dict, "<SENDER@EXAMPLE.COM>", result, sizeof(result));
+    assert_int_equal(rc, 1);
     assert_string_equal(result, "/etc/signing-milter/test.pem");
 
     dict_close(&dict);
@@ -89,7 +99,8 @@ static void test_dict_reload(void** state) {
     struct cdb_make cdbm;
     struct cdb_make cdbm2;
     DICT dict;
-    const char* result;
+    char result[DICT_BUFFER_LEN];
+    int rc;
 
     fd = mkstemp(path);
     assert_true(fd >= 0);
@@ -105,7 +116,8 @@ static void test_dict_reload(void** state) {
 
     dict_open(path, &dict);
 
-    result = dict_lookup(&dict, "<a>");
+    rc = dict_lookup(&dict, "<a>", result, sizeof(result));
+    assert_int_equal(rc, 1);
     assert_string_equal(result, "1");
 
     fd2 = mkstemp(path2);
@@ -119,7 +131,8 @@ static void test_dict_reload(void** state) {
     assert_int_equal(rename(path2, path), 0);
     dict_reload(&dict);
 
-    result = dict_lookup(&dict, "<a>");
+    rc = dict_lookup(&dict, "<a>", result, sizeof(result));
+    assert_int_equal(rc, 1);
     assert_string_equal(result, "2");
 
     dict_close(&dict);
@@ -147,28 +160,38 @@ static void test_lookup_short_and_malformed(void** state) {
 
     dict_open(path, &dict);
 
+    char result[DICT_BUFFER_LEN];
+    int rc;
+
     /* well-formed bracketed address */
-    const char* result = dict_lookup(&dict, "<a>");
+    rc = dict_lookup(&dict, "<a>", result, sizeof(result));
+    assert_int_equal(rc, 1);
     assert_string_equal(result, "1");
 
     /* empty sender */
-    result = dict_lookup(&dict, "<>");
+    rc = dict_lookup(&dict, "<>", result, sizeof(result));
+    assert_int_equal(rc, 1);
     assert_string_equal(result, "empty");
 
     /* too short or malformed: must not underflow */
-    result = dict_lookup(&dict, "<");
+    rc = dict_lookup(&dict, "<", result, sizeof(result));
+    assert_int_equal(rc, 0);
     assert_string_equal(result, "");
 
-    result = dict_lookup(&dict, "<a");
+    rc = dict_lookup(&dict, "<a", result, sizeof(result));
+    assert_int_equal(rc, 0);
     assert_string_equal(result, "");
 
-    result = dict_lookup(&dict, "<abc");
+    rc = dict_lookup(&dict, "<abc", result, sizeof(result));
+    assert_int_equal(rc, 0);
     assert_string_equal(result, "");
 
-    result = dict_lookup(&dict, "abc>");
+    rc = dict_lookup(&dict, "abc>", result, sizeof(result));
+    assert_int_equal(rc, 0);
     assert_string_equal(result, "");
 
-    result = dict_lookup(&dict, "<unknown@example.com>");
+    rc = dict_lookup(&dict, "<unknown@example.com>", result, sizeof(result));
+    assert_int_equal(rc, 0);
     assert_string_equal(result, "");
 
     dict_close(&dict);

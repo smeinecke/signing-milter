@@ -164,10 +164,13 @@ The value may contain any combination of the following words:
 .RS
 .TP
 .B keep
-for debugging purposes keep the plain and signed data unter /tmp/*-$queueid.
-In contrast to the option
+for debugging purposes keep the plain and signed data in the directory given
+with option
 .I \-k
-the directory is fix and saving occur not for all messages.
+as plain-$queueid and signed-$queueid.  If no directory is configured with
+.I \-k,
+the keep action is ignored.  Files are created with owner-only permissions
+(0600) and without following symbolic links.
 .TP
 .B opaque
 the signingmode is switched from detached to opaque. Opaque mode is intended

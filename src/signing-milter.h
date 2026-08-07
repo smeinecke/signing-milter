@@ -38,13 +38,26 @@ typedef struct DICT {
     time_t         mtime;
     struct cdb     cdb;
     char*          buffer;
-    char*          result;
-    unsigned       result_len;
     char*          cdb_path;
 } DICT;
 
 #define DICT_FLAG_TRY0NULL      (1<<2)  /* do not append 0 to key/value */
 #define DICT_FLAG_TRY1NULL      (1<<3)  /* append 0 to key/value */
+
+/*
+ * Maximum message size the milter will keep in memory.  This must stay
+ * below INT_MAX so the accumulated buffer can safely be passed to
+ * OpenSSL's BIO_new_mem_buf() and similar int-length APIs.
+ */
+#define MAX_MESSAGE_SIZE (64 * 1024 * 1024)
+
+/*
+ * Maximum Redis-returned PEM and certificate chain sizes we are willing
+ * to allocate.  These are intentionally generous but bounded to prevent
+ * a compromised or misconfigured Redis from causing unbounded allocation.
+ */
+#define MAX_REDIS_PEM_SIZE  (1024 * 1024)
+#define MAX_REDIS_CHAIN_SIZE (4 * 1024 * 1024)
 
 /* ======= NODES ======================= */
 /*

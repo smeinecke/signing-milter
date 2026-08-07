@@ -1,5 +1,7 @@
 #include "load_pem.h"
 
+#include <limits.h>
+
 /*
  * load an X509 certificate from an open PEM file descriptor
  */
@@ -110,6 +112,11 @@ X509* load_pem_cert_mem(const char* data, size_t len) {
     BIO*  bio  = NULL;
     X509* cert = NULL;
 
+    if (len > (size_t) INT_MAX) {
+        logmsg(LOG_ERR, "load_pem_cert_mem: PEM size too large");
+        return NULL;
+    }
+
     if ((bio = BIO_new_mem_buf((void*) data, (int) len)) == NULL) {
         logmsg(LOG_ERR, "load_pem_cert_mem: BIO_new_mem_buf() failed");
         goto end;
@@ -130,6 +137,11 @@ end:
 EVP_PKEY* load_pem_key_mem(const char* data, size_t len, const char* pass) {
     BIO*      bio  = NULL;
     EVP_PKEY* pkey = NULL;
+
+    if (len > (size_t) INT_MAX) {
+        logmsg(LOG_ERR, "load_pem_key_mem: PEM size too large");
+        return NULL;
+    }
 
     if ((bio = BIO_new_mem_buf((void*) data, (int) len)) == NULL) {
         logmsg(LOG_ERR, "load_pem_key_mem: BIO_new_mem_buf() failed");
@@ -155,6 +167,11 @@ STACK_OF(X509)* load_pem_chain_mem(const char* data, size_t len) {
     X509_INFO*           xi;
     int                  num;
     int                  numcerts;
+
+    if (len > (size_t) INT_MAX) {
+        logmsg(LOG_ERR, "load_pem_chain_mem: PEM size too large");
+        return NULL;
+    }
 
     if ((bio = BIO_new_mem_buf((void*) data, (int) len)) == NULL) {
         logmsg(LOG_ERR, "load_pem_chain_mem: BIO_new_mem_buf() failed");

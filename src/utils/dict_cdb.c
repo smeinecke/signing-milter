@@ -38,20 +38,12 @@ void dict_open(const char* path, DICT* dict) {
     memcpy(dict->cdb_path, path, path_len + 1);
 
     /*
-     * allocte some memory
+     * allocate a per-dict work buffer used while the global lock is held
      */
-    /* temp. buffer */
     if ((dict->buffer = malloc(DICT_BUFFER_LEN)) == NULL) {
         logmsg(LOG_ERR, "dict_open: malloc: %m", strerror(errno));
         exit(EX_SOFTWARE);
     }
-    /* result buffer */
-    if ((dict->result = malloc(DICT_BUFFER_LEN)) == NULL) {
-        logmsg(LOG_ERR, "dict_open: malloc: %m", strerror(errno));
-        exit(EX_SOFTWARE);
-    }
-    /* grows dynamically, remember its size */
-    dict->result_len = DICT_BUFFER_LEN;
 
     /*
      * Warn if the source file is newer than the indexed file, except when
@@ -132,6 +124,11 @@ int dict_reload(DICT* dict) {
         return -1;
     }
 
+    /*
+     * Only replace the old dictionary once the new one has been fully
+     * validated.  This keeps the previous (trusted) table active if the new
+     * file cannot be loaded.
+     */
     cdb_free(&dict->cdb);
     if (dict->stat_fd >= 0)
         close(dict->stat_fd);
@@ -144,34 +141,51 @@ int dict_reload(DICT* dict) {
     return 0;
 }
 
-const char* dict_lookup(DICT* dict, const char* key) {
+/*
+ * Look up key in dict and copy the value into the caller-owned result buffer.
+ *
+ * Returns:
+ *   1  - value found and copied into result (NUL-terminated)
+ *   0  - key not found (result[0] set to '\0')
+ *  -1  - error (key too long, CDB read error, or result buffer too small)
+ *
+ * The result buffer is always owned by the caller; no internal shared storage
+ * is ever returned.
+ */
+int dict_lookup(DICT* dict, const char* key, char* result, size_t result_len) {
 
     size_t          keylen;
     unsigned        vlen;
     const char*     src = key;
     char*           p;
-    char*           new_result = NULL;
     int             status = 0;
+
+    if (result == NULL || result_len == 0)
+        return -1;
+
+    result[0] = '\0';
 
     pthread_mutex_lock(&dict_global_lock);
 
-    if (dict->stat_fd < 0 || dict->result == NULL) {
+    if (dict->stat_fd < 0 || dict->buffer == NULL) {
         pthread_mutex_unlock(&dict_global_lock);
-        return "";
+        return 0;
     }
 
-    /*
-     * set the defined return value
-     */
-    *(dict->result) = '\0';
+    if (key == NULL) {
+        pthread_mutex_unlock(&dict_global_lock);
+        return 0;
+    }
 
     keylen = strlen(key);
     if (keylen + 1 > DICT_BUFFER_LEN) {
-        logmsg(LOG_ERR, "dict_lookup: buffer to small: %m", strerror(errno));
-        exit(EX_SOFTWARE);
+        logmsg(LOG_ERR, "dict_lookup: key too long");
+        pthread_mutex_unlock(&dict_global_lock);
+        return -1;
     }
 
-    /* non_smtpd_milter: addresses have *no* <>
+    /*
+     * non_smtpd_milter: addresses have *no* <>
      * smtpd_milter:     addresses *have* <>
      * assumption: if the first character is a <,
      *             the last character will be a >.
@@ -183,8 +197,13 @@ const char* dict_lookup(DICT* dict, const char* key) {
     }
     /* empty sender is, unfortunately, empty now */
 
-    strncpy(dict->buffer, src, keylen);
-    /* the terminating \0 is still missing */
+    if (keylen > DICT_BUFFER_LEN - 1) {
+        logmsg(LOG_ERR, "dict_lookup: key too long after address normalization");
+        pthread_mutex_unlock(&dict_global_lock);
+        return -1;
+    }
+
+    memcpy(dict->buffer, src, keylen);
     p = dict->buffer + keylen;
     *p = '\0';
 
@@ -223,30 +242,35 @@ const char* dict_lookup(DICT* dict, const char* key) {
     }
     if (status < 0) {
         logmsg(LOG_ERR, "error reading %s: %m", dict->name, strerror(errno));
-        exit(EX_SOFTWARE);
+        pthread_mutex_unlock(&dict_global_lock);
+        return -1;
     }
 
     if (status) {
         vlen = cdb_datalen(&dict->cdb);
-        if (dict->result_len < vlen) {
-            new_result = realloc(dict->result, vlen + 1);
-            if (new_result == NULL) {
-                logmsg(LOG_ERR, "dict_lookup: realloc: %m", strerror(errno));
-                exit(EX_SOFTWARE);
-            }
-            dict->result = new_result;
-            dict->result_len = vlen;
+        if (vlen == 0) {
+            /* an empty value is equivalent to "not found" */
+            result[0] = '\0';
+            pthread_mutex_unlock(&dict_global_lock);
+            return 0;
         }
-        if (cdb_read(&dict->cdb, dict->result, vlen, cdb_datapos(&dict->cdb)) < 0) {
+        if ((size_t) vlen + 1 > result_len) {
+            logmsg(LOG_ERR, "dict_lookup: result for %s too long for caller buffer", dict->name);
+            pthread_mutex_unlock(&dict_global_lock);
+            return -1;
+        }
+        if (cdb_read(&dict->cdb, result, vlen, cdb_datapos(&dict->cdb)) < 0) {
             logmsg(LOG_ERR, "error reading %s: %m", dict->name, strerror(errno));
-            exit(EX_SOFTWARE);
+            pthread_mutex_unlock(&dict_global_lock);
+            return -1;
         }
-        dict->result[vlen] = '\0';
+        result[vlen] = '\0';
+        pthread_mutex_unlock(&dict_global_lock);
+        return 1;
     }
 
     pthread_mutex_unlock(&dict_global_lock);
-    return (dict->result);
-
+    return 0;
 }
 
 /*
@@ -409,7 +433,9 @@ void dict_close(DICT* dict) {
         cdb_free(&dict->cdb);
         close(dict->stat_fd);
     }
+    dict->stat_fd = -1;
     free(dict->buffer);
-    free(dict->result);
+    dict->buffer = NULL;
     free(dict->cdb_path);
+    dict->cdb_path = NULL;
 }

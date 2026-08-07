@@ -20,7 +20,7 @@ extern int delete_marked_headers(SMFICTX* ctx, CTXDATA* ctxdata);
 
 extern void dict_open(const char* path, DICT* dict);
 extern int  dict_reload(DICT* dict);
-extern const char* dict_lookup(DICT* dict, const char* key);
+extern int dict_lookup(DICT* dict, const char* key, char* result, size_t result_len);
 extern void dict_close(DICT* dict);
 
 extern void dump_mailflags(int flags);

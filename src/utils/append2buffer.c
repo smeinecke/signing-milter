@@ -14,6 +14,11 @@ int append2buffer(unsigned char** buf, size_t* buf_size, const char* data2append
     }
 
     new_buf_size = *buf_size + append_data_size;
+    if (new_buf_size > MAX_MESSAGE_SIZE) {
+        logmsg(LOG_ERR, "append2buffer: message size limit exceeded");
+        return(1);
+    }
+
     new_buf = realloc(*buf, new_buf_size);
     if (new_buf == NULL) {
         logmsg(LOG_ERR, "append2buffer: realloc failed");
