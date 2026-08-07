@@ -71,6 +71,7 @@ option(WITH_CRON     "Install cron daily/hourly scripts" ON)
 option(WITH_SUPERVISE "Install the daemontools supervise symlink" OFF)
 option(WITH_EXAMPLES "Install the example /etc/signing-milter directory" ON)
 option(WITH_REDIS    "Enable Redis-backed dynamic certificate lookup" ON)
+option(WITH_REDIS_SSL "Enable Redis TLS (rediss://) support" ON)
 
 # ----------------------------------------------------------------------
 # Required dependencies
@@ -91,7 +92,7 @@ endif()
 find_package(Threads REQUIRED)
 
 # ----------------------------------------------------------------------
-# Optional Redis client (hiredis)
+# Optional Redis client (hiredis) and TLS support (hiredis_ssl)
 # ----------------------------------------------------------------------
 if(WITH_REDIS)
     pkg_check_modules(HIREDIS hiredis)
@@ -99,6 +100,14 @@ if(WITH_REDIS)
         message(FATAL_ERROR
             "WITH_REDIS is ON but hiredis was not found. "
             "Install libhiredis-dev or set -DWITH_REDIS=OFF")
+    endif()
+    if(WITH_REDIS_SSL)
+        pkg_check_modules(HIREDIS_SSL hiredis_ssl)
+        if(HIREDIS_SSL_FOUND)
+            message(STATUS "hiredis_ssl found; rediss:// TLS support enabled")
+        else()
+            message(WARNING "hiredis_ssl not found; rediss:// TLS support disabled")
+        endif()
     endif()
 endif()
 

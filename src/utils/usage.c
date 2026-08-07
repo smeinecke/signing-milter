@@ -30,6 +30,8 @@ void usage(void) {
     printf("                  default: %s\n", opt_redis_prefix);
     printf("  -r uri          Redis URI for dynamic certificate lookup\n");
     printf("                  - redis://[password@]host:port/db\n");
+    printf("                  - rediss://[password@]host:port/db?verify=peer\n");
+    printf("                    (TLS; optional cacert=, capath=, cert=, key=, sni=)\n");
     printf("                  - unix:///path/to/redis.sock\n");
     printf("                  default: none\n");
     printf("  -R              enable Redis-backed auth-signing table (requires -r)\n");

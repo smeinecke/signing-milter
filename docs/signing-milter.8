@@ -210,9 +210,23 @@ The
 has one of the following forms:
 .IR redis://[password@]host:port/db ,
 .IR redis://[username:password@]host:port/db ,
+.IR rediss://[username:password@]host:port/db ,
 or
 .IR unix:///path/to/redis.sock .
-TLS (rediss://) is not supported.
+.PP
+For
+.IR rediss:// ,
+the connection is wrapped in TLS.  By default the server certificate is
+validated against the system CA store and the URI host is used for SNI.
+Optional query parameters are
+.IR verify= {none,peer,fail} ,
+.IR cacert=/path/to/ca.pem ,
+.IR capath=/path/to/cadir ,
+.IR cert=/path/to/client-cert.pem ,
+.IR key=/path/to/client-key.pem ,
+and
+.IR sni=hostname .
+Client certificates (cert and key) are only used for mutual TLS.
 .TP
 .B \-W file
 Read the static passphrase for encrypted private keys from
