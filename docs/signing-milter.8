@@ -216,9 +216,10 @@ or
 .PP
 For
 .IR rediss:// ,
-the connection is wrapped in TLS.  By default the server certificate is
-validated against the system or configured CA store, the certificate chain is
-checked, and the URI host is verified against the server's certificate.
+the connection is wrapped in TLS 1.2 or newer.  By default the server
+certificate is validated against the system or configured CA store, the
+certificate chain is checked, and the URI host is verified against the server's
+certificate.
 .IR verify=peer
 performs full chain and hostname/IP verification (this is the default).
 .IR verify=none
@@ -236,6 +237,14 @@ override the CA store.
 and
 .IR key=/path/to/client-key.pem
 are used for mutual TLS.
+The
+.IR cert
+file may contain the leaf client certificate followed by any intermediate
+certificates required to build a trust chain.
+TLS parameters are rejected for plaintext
+.IR redis:// .
+IPv6 hosts must be bracketed:
+.IR rediss://[::1]:6380/0 .
 Unknown or duplicate TLS parameters are rejected at startup.
 .TP
 .B \-W file

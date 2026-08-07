@@ -454,20 +454,59 @@ static int redis_parse_uri(const char* uri) {
     slash = strrchr(g_uri.host, '/');
     if (slash != NULL) {
         *slash = '\0';
-        if (sscanf(slash + 1, "%d", &g_uri.db) != 1)
-            g_uri.db = 0;
-        if (g_uri.db < 0)
+        if (sscanf(slash + 1, "%d", &g_uri.db) != 1 || g_uri.db < 0)
             g_uri.db = 0;
     }
 
-    /* port */
-    colon = strrchr(g_uri.host, ':');
-    if (colon != NULL) {
-        *colon = '\0';
-        if (sscanf(colon + 1, "%d", &g_uri.port) != 1)
-            g_uri.port = 6379;
-        if (g_uri.port <= 0 || g_uri.port > 65535)
-            g_uri.port = 6379;
+    /*
+     * Port extraction: bracketed IPv6 literals ([::1]:6380) are handled
+     * explicitly so colons inside the address are not mistaken for a port
+     * separator.  Unbracketed TCP hosts use the usual strrchr(':') split.
+     */
+    if (*g_uri.host == '[') {
+        char* end = strchr(g_uri.host, ']');
+        if (end == NULL) {
+            logmsg(LOG_ERR, "redis: malformed IPv6 literal in URI (URI redacted)");
+            free(query);
+            free(work);
+            redis_uri_free();
+            return -1;
+        }
+        *end = '\0';
+        if (*(end + 1) == ':') {
+            if (sscanf(end + 2, "%d", &g_uri.port) != 1 ||
+                g_uri.port <= 0 || g_uri.port > 65535) {
+                logmsg(LOG_ERR, "redis: invalid port in IPv6 URI (URI redacted)");
+                free(query);
+                free(work);
+                redis_uri_free();
+                return -1;
+            }
+        } else if (*(end + 1) != '\0') {
+            logmsg(LOG_ERR, "redis: malformed IPv6 URI (URI redacted)");
+            free(query);
+            free(work);
+            redis_uri_free();
+            return -1;
+        }
+        {
+            size_t iplen = strlen(g_uri.host + 1);
+            memmove(g_uri.host, g_uri.host + 1, iplen);
+            g_uri.host[iplen] = '\0';
+        }
+    } else {
+        colon = strrchr(g_uri.host, ':');
+        if (colon != NULL) {
+            *colon = '\0';
+            if (sscanf(colon + 1, "%d", &g_uri.port) != 1 ||
+                g_uri.port <= 0 || g_uri.port > 65535) {
+                logmsg(LOG_ERR, "redis: invalid port in URI (URI redacted)");
+                free(query);
+                free(work);
+                redis_uri_free();
+                return -1;
+            }
+        }
     }
 
     if (*g_uri.host == '\0' && !g_uri.is_unix) {
@@ -480,6 +519,13 @@ static int redis_parse_uri(const char* uri) {
 
     if (query != NULL) {
 #ifdef WITH_REDIS_SSL
+        if (!g_uri.use_tls) {
+            logmsg(LOG_ERR, "redis: TLS query parameters are not allowed for plaintext redis://");
+            free(query);
+            free(work);
+            redis_uri_free();
+            return -1;
+        }
         rc = redis_parse_tls_query(query);
         if (rc < 0) {
             free(query);
@@ -487,6 +533,12 @@ static int redis_parse_uri(const char* uri) {
             redis_uri_free();
             return -1;
         }
+#else
+        logmsg(LOG_ERR, "redis: query parameters are not allowed for redis://");
+        free(query);
+        free(work);
+        redis_uri_free();
+        return -1;
 #endif
         free(query);
     }
@@ -731,9 +783,25 @@ int redis_global_init(void) {
             goto init_failed;
         }
 
+        /*
+         * The shared SSL context is fully configured before any worker thread
+         * is created and is treated as immutable afterwards.  Each Redis
+         * connection obtains its own SSL object via SSL_new(g_ssl_ctx); only
+         * per-connection state is modified on that SSL object.
+         */
+        if (SSL_CTX_set_min_proto_version(g_ssl_ctx, TLS1_2_VERSION) != 1) {
+            logmsg(LOG_ERR, "redis: SSL_CTX_set_min_proto_version(TLS1_2_VERSION) failed");
+            goto init_failed;
+        }
+        (void) SSL_CTX_set_options(g_ssl_ctx,
+                                   SSL_OP_NO_SSLv2 |
+                                   SSL_OP_NO_SSLv3 |
+                                   SSL_OP_NO_TLSv1 |
+                                   SSL_OP_NO_TLSv1_1);
+
         if (g_uri.tls_cert != NULL && g_uri.tls_key != NULL) {
-            if (SSL_CTX_use_certificate_file(g_ssl_ctx, g_uri.tls_cert, SSL_FILETYPE_PEM) != 1) {
-                logmsg(LOG_ERR, "redis: failed to load client certificate %s", g_uri.tls_cert);
+            if (SSL_CTX_use_certificate_chain_file(g_ssl_ctx, g_uri.tls_cert) != 1) {
+                logmsg(LOG_ERR, "redis: failed to load client certificate chain %s", g_uri.tls_cert);
                 goto init_failed;
             }
             if (SSL_CTX_use_PrivateKey_file(g_ssl_ctx, g_uri.tls_key, SSL_FILETYPE_PEM) != 1) {
@@ -799,6 +867,12 @@ void redis_global_cleanup(void) {
     redis_tls_initialized = 0;
 
 #ifdef WITH_REDIS_SSL
+    /*
+     * The shared SSL context is freed at milter shutdown after all worker
+     * threads have finished handling connections.  Reconnect paths create a
+     * brand new SSL object from this immutable context, so there is never a
+     * stale SSL* or SSL_CTX* reference once the previous context is freed.
+     */
     if (g_ssl_ctx != NULL) {
         SSL_CTX_free(g_ssl_ctx);
         g_ssl_ctx = NULL;

@@ -13,6 +13,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 sys.path.insert(0, "/usr/lib/python3/dist-packages")
@@ -38,6 +39,17 @@ def wait_for_socket(path, timeout=15.0):
     return False
 
 
+def ipv6_loopback_available():
+    """Return True if the test environment can bind and connect to ::1."""
+    try:
+        s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        s.bind(("::1", 0))
+        s.close()
+        return True
+    except OSError:
+        return False
+
+
 class RedisTlsTest:
     def __init__(self):
         self.work = tempfile.mkdtemp(prefix="signing-milter-redis-tls-")
@@ -46,17 +58,22 @@ class RedisTlsTest:
         self.ca_key = os.path.join(self.work, "ca-key.pem")
         self.ca_cert = os.path.join(self.work, "ca.pem")
         self.server_key = os.path.join(self.work, "server-key.pem")
-        self.server_csr = os.path.join(self.work, "server.csr")
         self.server_cert = os.path.join(self.work, "server-cert.pem")
         self.client_key = os.path.join(self.work, "client-key.pem")
-        self.client_csr = os.path.join(self.work, "client.csr")
         self.client_cert = os.path.join(self.work, "client-cert.pem")
+        self.client_chain_cert = os.path.join(self.work, "client-chain.pem")
+        self.intermediate_key = os.path.join(self.work, "intermediate-key.pem")
+        self.intermediate_cert = os.path.join(self.work, "intermediate-cert.pem")
         self.wrong_ca_key = os.path.join(self.work, "wrong-ca-key.pem")
         self.wrong_ca_cert = os.path.join(self.work, "wrong-ca.pem")
         self.wrong_client_key = os.path.join(self.work, "wrong-client-key.pem")
         self.wrong_client_cert = os.path.join(self.work, "wrong-client-cert.pem")
         self.selfsigned_key = os.path.join(self.work, "selfsigned-key.pem")
         self.selfsigned_cert = os.path.join(self.work, "selfsigned-cert.pem")
+        self.server_v6_cert = os.path.join(self.work, "server-v6-cert.pem")
+        self.server_v6_key = os.path.join(self.work, "server-v6-key.pem")
+        self.server_dns_cert = os.path.join(self.work, "server-dns-cert.pem")
+        self.server_dns_key = os.path.join(self.work, "server-dns-key.pem")
 
         self._generate_certs()
 
@@ -64,44 +81,97 @@ class RedisTlsTest:
         run(["openssl", "genpkey", "-algorithm", "RSA", "-out", keypath,
              "-pkeyopt", "rsa_keygen_bits:2048"], check=True)
 
-    def _generate_certs(self):
-        # CA
-        self._genrsa(self.ca_key)
-        ca_cnf = os.path.join(self.work, "ca.cnf")
-        with open(ca_cnf, "w") as f:
-            f.write(
-                "[req]\ndistinguished_name = dn\nprompt = no\n[dn]\nCN = test-ca\n"
-                "[v3_ca]\nsubjectKeyIdentifier = hash\nauthorityKeyIdentifier = keyid:always,issuer\n"
-                "basicConstraints = critical,CA:true\nkeyUsage = critical,keyCertSign,cRLSign\n"
-            )
-        run(["openssl", "req", "-new", "-x509", "-key", self.ca_key, "-out", self.ca_cert,
-             "-days", "1", "-config", ca_cnf, "-extensions", "v3_ca", "-nodes"], check=True)
+    def _issue_cert(self, key, cert, csr, issuer_key, issuer_cert, ext=None, days="1"):
+        cmd = ["openssl", "x509", "-req", "-in", csr, "-CA", issuer_cert,
+               "-CAkey", issuer_key, "-CAcreateserial", "-out", cert, "-days", days, "-sha256"]
+        if ext:
+            cmd += ["-extfile", ext, "-extensions", "v3_ext"]
+        run(cmd, check=True)
 
-        # server cert for localhost with IP SAN
+    def _generate_certs(self):
+        # Root CA
+        self._genrsa(self.ca_key)
+        run(["openssl", "req", "-new", "-x509", "-key", self.ca_key, "-out", self.ca_cert,
+             "-days", "1", "-subj", "/CN=test-ca", "-nodes"], check=True)
+
+        # Intermediate CA (signed by root) and client cert chain
+        self._genrsa(self.intermediate_key)
+        intermediate_csr = os.path.join(self.work, "intermediate.csr")
+        run(["openssl", "req", "-new", "-key", self.intermediate_key, "-out", intermediate_csr,
+             "-subj", "/CN=test-intermediate-ca"], check=True)
+        intermediate_cnf = os.path.join(self.work, "intermediate.cnf")
+        with open(intermediate_cnf, "w") as f:
+            f.write(
+                "[v3_ext]\nsubjectKeyIdentifier = hash\n"
+                "authorityKeyIdentifier = keyid,issuer\n"
+                "basicConstraints = critical,CA:true,pathlen:0\n"
+                "keyUsage = critical,keyCertSign,cRLSign\n"
+            )
+        self._issue_cert(self.intermediate_key, self.intermediate_cert, intermediate_csr,
+                         self.ca_key, self.ca_cert, ext=intermediate_cnf)
+
+        # Server cert with IP:127.0.0.1, IP:::1 and DNS:localhost
         self._genrsa(self.server_key)
+        server_csr = os.path.join(self.work, "server.csr")
         server_cnf = os.path.join(self.work, "server.cnf")
         with open(server_cnf, "w") as f:
             f.write(
                 "[req]\ndistinguished_name = dn\nprompt = no\n[dn]\nCN = localhost\n"
-                "[v3_server]\nsubjectKeyIdentifier = hash\nauthorityKeyIdentifier = keyid,issuer\n"
+                "[v3_ext]\nsubjectKeyIdentifier = hash\nauthorityKeyIdentifier = keyid,issuer\n"
                 "basicConstraints = CA:FALSE\nkeyUsage = critical,digitalSignature,keyEncipherment\n"
-                "extendedKeyUsage = serverAuth\nsubjectAltName = DNS:localhost,IP:127.0.0.1\n"
+                "extendedKeyUsage = serverAuth\n"
+                "subjectAltName = DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1\n"
             )
-        run(["openssl", "req", "-new", "-key", self.server_key, "-out", self.server_csr,
+        run(["openssl", "req", "-new", "-key", self.server_key, "-out", server_csr,
              "-config", server_cnf], check=True)
-        run(["openssl", "x509", "-req", "-in", self.server_csr, "-CA", self.ca_cert,
-             "-CAkey", self.ca_key, "-CAcreateserial", "-out", self.server_cert, "-days", "1",
-             "-sha256", "-extfile", server_cnf, "-extensions", "v3_server"], check=True)
+        self._issue_cert(self.server_key, self.server_cert, server_csr,
+                         self.ca_key, self.ca_cert, ext=server_cnf)
 
-        # client cert
+        # Server cert with only IPv6 and DNS:localhost
+        self._genrsa(self.server_v6_key)
+        server_v6_csr = os.path.join(self.work, "server-v6.csr")
+        server_v6_cnf = os.path.join(self.work, "server-v6.cnf")
+        with open(server_v6_cnf, "w") as f:
+            f.write(
+                "[req]\ndistinguished_name = dn\nprompt = no\n[dn]\nCN = localhost\n"
+                "[v3_ext]\nsubjectKeyIdentifier = hash\nauthorityKeyIdentifier = keyid,issuer\n"
+                "basicConstraints = CA:FALSE\nkeyUsage = critical,digitalSignature,keyEncipherment\n"
+                "extendedKeyUsage = serverAuth\n"
+                "subjectAltName = DNS:localhost,IP:0:0:0:0:0:0:0:1\n"
+            )
+        run(["openssl", "req", "-new", "-key", self.server_v6_key, "-out", server_v6_csr,
+             "-config", server_v6_cnf], check=True)
+        self._issue_cert(self.server_v6_key, self.server_v6_cert, server_v6_csr,
+                         self.ca_key, self.ca_cert, ext=server_v6_cnf)
+
+        # Server cert with only DNS:localhost (no IP SAN)
+        self._genrsa(self.server_dns_key)
+        server_dns_csr = os.path.join(self.work, "server-dns.csr")
+        server_dns_cnf = os.path.join(self.work, "server-dns.cnf")
+        with open(server_dns_cnf, "w") as f:
+            f.write(
+                "[req]\ndistinguished_name = dn\nprompt = no\n[dn]\nCN = localhost\n"
+                "[v3_ext]\nsubjectKeyIdentifier = hash\nauthorityKeyIdentifier = keyid,issuer\n"
+                "basicConstraints = CA:FALSE\nkeyUsage = critical,digitalSignature,keyEncipherment\n"
+                "extendedKeyUsage = serverAuth\nsubjectAltName = DNS:localhost\n"
+            )
+        run(["openssl", "req", "-new", "-key", self.server_dns_key, "-out", server_dns_csr,
+             "-config", server_dns_cnf], check=True)
+        self._issue_cert(self.server_dns_key, self.server_dns_cert, server_dns_csr,
+                         self.ca_key, self.ca_cert, ext=server_dns_cnf)
+
+        # Client cert signed by intermediate, bundled with the intermediate cert
         self._genrsa(self.client_key)
-        run(["openssl", "req", "-new", "-key", self.client_key, "-out", self.client_csr,
+        client_csr = os.path.join(self.work, "client.csr")
+        run(["openssl", "req", "-new", "-key", self.client_key, "-out", client_csr,
              "-subj", "/CN=redis-client"], check=True)
-        run(["openssl", "x509", "-req", "-in", self.client_csr, "-CA", self.ca_cert,
-             "-CAkey", self.ca_key, "-CAcreateserial", "-out", self.client_cert, "-days", "1",
-             "-sha256"], check=True)
+        self._issue_cert(self.client_key, self.client_cert, client_csr,
+                         self.intermediate_key, self.intermediate_cert)
+        with open(self.client_chain_cert, "w") as f:
+            f.write(open(self.client_cert).read())
+            f.write(open(self.intermediate_cert).read())
 
-        # wrong CA and client cert
+        # Wrong CA and client cert
         self._genrsa(self.wrong_ca_key)
         run(["openssl", "req", "-new", "-x509", "-key", self.wrong_ca_key, "-out",
              self.wrong_ca_cert, "-days", "1", "-subj", "/CN=wrong-ca", "-nodes"], check=True)
@@ -109,16 +179,16 @@ class RedisTlsTest:
         wrong_client_csr = os.path.join(self.work, "wrong-client.csr")
         run(["openssl", "req", "-new", "-key", self.wrong_client_key, "-out", wrong_client_csr,
              "-subj", "/CN=wrong-client"], check=True)
-        run(["openssl", "x509", "-req", "-in", wrong_client_csr, "-CA", self.wrong_ca_cert,
-             "-CAkey", self.wrong_ca_key, "-CAcreateserial", "-out", self.wrong_client_cert,
-             "-days", "1", "-sha256"], check=True)
+        self._issue_cert(self.wrong_client_key, self.wrong_client_cert, wrong_client_csr,
+                         self.wrong_ca_key, self.wrong_ca_cert)
 
-        # self-signed server cert
+        # Self-signed server cert
         self._genrsa(self.selfsigned_key)
         run(["openssl", "req", "-new", "-x509", "-key", self.selfsigned_key, "-out",
              self.selfsigned_cert, "-days", "1", "-subj", "/CN=localhost", "-nodes"], check=True)
 
-    def start_redis(self, port, cert, key, ca=None, auth_clients="no"):
+    def start_redis(self, port, cert, key, ca=None, auth_clients="no", bind=None, protocols=None,
+                    connect_host="127.0.0.1"):
         """Start redis-server with TLS on the given port."""
         conf = os.path.join(self.work, f"redis-{port}.conf")
         with open(conf, "w") as f:
@@ -129,26 +199,36 @@ class RedisTlsTest:
             if ca:
                 f.write(f"tls-ca-cert-file {ca}\n")
             f.write(f"tls-auth-clients {auth_clients}\n")
+            if bind:
+                f.write(f"bind {bind}\n")
+            if protocols:
+                f.write(f"tls-protocols {protocols}\n")
             f.write(f"pidfile {self.work}/redis-{port}.pid\n")
             f.write(f"logfile {self.work}/redis-{port}.log\n")
             f.write("daemonize yes\n")
             f.write(f"dir {self.work}\n")
         p = subprocess.Popen(["redis-server", conf])
         self.redis_procs.append(p)
-        # wait for port to be reachable
         deadline = time.time() + 10
         while time.time() < deadline:
             try:
-                with socket.create_connection(("127.0.0.1", port), timeout=1):
-                    break
+                if connect_host == "::1":
+                    s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+                    s.settimeout(1)
+                    s.connect(("::1", port))
+                    s.close()
+                else:
+                    with socket.create_connection((connect_host, port), timeout=1):
+                        pass
+                break
             except OSError:
                 time.sleep(0.1)
         else:
-            raise RuntimeError(f"redis-server did not start on port {port}")
+            raise RuntimeError(f"redis-server did not start on {connect_host}:{port}")
         return p
 
-    def redis_cli(self, port, *args, ca=None, cert=None, key=None, insecure=False):
-        cmd = ["redis-cli", "--tls", "-p", str(port)]
+    def redis_cli(self, port, *args, host="127.0.0.1", ca=None, cert=None, key=None, insecure=False):
+        cmd = ["redis-cli", "--tls", "-h", host, "-p", str(port)]
         if ca:
             cmd += ["--cacert", ca]
         if cert:
@@ -207,16 +287,37 @@ class RedisTlsTest:
 
     def run(self):
         failures = []
+        skips = []
         try:
-            self._run_scenarios()
-        except AssertionError as e:
-            failures.append(str(e))
-        except Exception as e:
-            failures.append(f"exception: {e}")
-        return failures
+            self._run_scenarios(skips)
+            try:
+                self._test_stalled_tls()
+            except Exception as e:
+                failures.append(str(e))
+            try:
+                self._test_tls_version(skips)
+            except Exception as e:
+                failures.append(str(e))
+            if ipv6_loopback_available():
+                try:
+                    self._test_ipv6(skips)
+                except Exception as e:
+                    failures.append(str(e))
+            else:
+                skips.append("IPv6 loopback not available, skipping IPv6 tests")
+        finally:
+            self.cleanup(keep=bool(failures))
 
-    def _run_scenarios(self):
-        # Generate a valid milter signing certificate once and reuse it.
+        if failures:
+            for f in failures:
+                print(f"FAIL: {f}")
+            sys.exit(1)
+        if skips:
+            for s in skips:
+                print(f"SKIP: {s}")
+        print("PASS")
+
+    def _run_scenarios(self, skips):
         cert_dir = os.path.join(self.work, "signing-cert")
         os.makedirs(cert_dir, exist_ok=True)
         run([os.path.join(os.path.dirname(__file__), "..", "..", "..",
@@ -252,19 +353,18 @@ class RedisTlsTest:
         sock, _ = self.start_milter(
             f"rediss://localhost:{port2}/0?verify=none")
         r = self.mailfrom_reply(sock)
-        # If no signing cert is available the milter may ACCEPT; CONTINUE is also acceptable.
         if r not in (constants.SMFIR_CONTINUE, constants.SMFIR_ACCEPT):
             raise AssertionError(f"verify=none with self-signed: expected CONTINUE/ACCEPT, got {r}")
 
-        # Scenario 5: valid mTLS -> success
+        # Scenario 5: valid mTLS with intermediate client cert chain -> success
         port3 = 16382
         self.start_redis(port3, self.server_cert, self.server_key, ca=self.ca_cert, auth_clients="yes")
         sock, _ = self.start_milter(
             f"rediss://localhost:{port3}/0?verify=peer&cacert={self.ca_cert}"
-            f"&cert={self.client_cert}&key={self.client_key}")
+            f"&cert={self.client_chain_cert}&key={self.client_key}")
         r = self.mailfrom_reply(sock)
         if r not in (constants.SMFIR_CONTINUE, constants.SMFIR_ACCEPT):
-            raise AssertionError(f"valid mTLS: expected CONTINUE/ACCEPT, got {r}")
+            raise AssertionError(f"valid mTLS chain: expected CONTINUE/ACCEPT, got {r}")
 
         # Scenario 6: missing client cert on server that requires it -> failure
         sock, _ = self.start_milter(
@@ -286,9 +386,56 @@ class RedisTlsTest:
         r = self.mailfrom_reply(sock, sender=long_sender)
         self.assert_reply("oversized MAIL FROM", constants.SMFIR_TEMPFAIL, r)
 
+    def _test_ipv6(self, skips):
+        cert_dir = os.path.join(self.work, "signing-cert-v6")
+        os.makedirs(cert_dir, exist_ok=True)
+        run([os.path.join(os.path.dirname(__file__), "..", "..", "..",
+             "tests", "integration", "data", "gen-test-cert.sh"), cert_dir], check=True)
+        with open(os.path.join(cert_dir, "test-cert+key.pem")) as f:
+            signing_pem = f.read()
+
+        # IPv6 IP-SAN certificate succeeds with verify=peer
+        port = 16383
+        self.start_redis(port, self.server_v6_cert, self.server_v6_key, ca=self.ca_cert,
+                         bind="127.0.0.1 ::1", connect_host="::1")
+        self.redis_cli(port, "HMSET", "signing-milter:sender@example.com", "pem", signing_pem, "chain", "",
+                       host="::1", ca=self.ca_cert).check_returncode()
+        sock, _ = self.start_milter(
+            f"rediss://[::1]:{port}/0?verify=peer&cacert={self.ca_cert}")
+        r = self.mailfrom_reply(sock)
+        self.assert_reply("IPv6 IP-SAN + verify=peer", constants.SMFIR_CONTINUE, r)
+
+        # DNS-only certificate does not validate against IPv6 literal
+        port2 = 16384
+        self.start_redis(port2, self.server_dns_cert, self.server_dns_key, ca=self.ca_cert,
+                         bind="127.0.0.1 ::1", connect_host="::1")
+        sock, _ = self.start_milter(
+            f"rediss://[::1]:{port2}/0?verify=peer&cacert={self.ca_cert}")
+        r = self.mailfrom_reply(sock)
+        self.assert_reply("DNS-only cert vs IPv6 literal", constants.SMFIR_TEMPFAIL, r)
+
+    def _test_tls_version(self, skips):
+        """Milter must refuse TLS versions below 1.2."""
+        port = 16385
+        try:
+            self.start_redis(port, self.server_cert, self.server_key, ca=self.ca_cert,
+                             bind="127.0.0.1", protocols='"TLSv1.1"')
+        except RuntimeError:
+            skips.append("Redis TLSv1.1 server could not be started, skipping version test")
+            return
+
+        sock, _ = self.start_milter(
+            f"rediss://127.0.0.1:{port}/0?verify=none")
+        t0 = time.time()
+        r = self.mailfrom_reply(sock)
+        elapsed = time.time() - t0
+        if r != constants.SMFIR_TEMPFAIL:
+            raise AssertionError(f"TLSv1.1 server: expected TEMPFAIL, got {r}")
+        if elapsed > 6.0:
+            raise AssertionError(f"TLSv1.1 server: took too long ({elapsed:.2f}s), possible timeout fallback")
+
     def _test_stalled_tls(self):
         """TCP peer accepts but never completes TLS; milter must time out."""
-        # start a silent listener on an ephemeral port
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         listener.bind(("127.0.0.1", 0))
@@ -300,7 +447,6 @@ class RedisTlsTest:
             time.sleep(30)
             conn.close()
 
-        import threading
         t = threading.Thread(target=accept_and_hang, daemon=True)
         t.start()
 
@@ -323,23 +469,7 @@ def main():
         sys.exit(0)
 
     test = RedisTlsTest()
-    keep = False
-    try:
-        failures = test.run()
-        try:
-            test._test_stalled_tls()
-        except Exception as e:
-            failures.append(str(e))
-        if failures:
-            keep = True
-    finally:
-        test.cleanup(keep=keep)
-
-    if failures:
-        for f in failures:
-            print(f"FAIL: {f}")
-        sys.exit(1)
-    print("PASS")
+    test.run()
 
 
 if __name__ == "__main__":

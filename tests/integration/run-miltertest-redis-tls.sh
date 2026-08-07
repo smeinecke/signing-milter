@@ -14,6 +14,11 @@ if [ ! -x "$BUILD_DIR/signing-milter" ]; then
     exit 1
 fi
 
+if grep -q '^WITH_REDIS_SSL:BOOL=OFF' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+    echo "SKIP: signing-milter was built without WITH_REDIS_SSL"
+    exit 0
+fi
+
 if ! command -v redis-server >/dev/null 2>&1 || ! command -v redis-cli >/dev/null 2>&1; then
     echo "SKIP: redis-server and redis-cli are required"
     exit 0

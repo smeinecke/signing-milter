@@ -41,10 +41,7 @@ USER test
 RUN rm -rf /src/build && \
     cmake -S /src -B /src/build -DCMAKE_BUILD_TYPE=Release && \
     cmake --build /src/build -j$(nproc) && \
-    ctest --test-dir /src/build --output-on-failure && \
-    /src/tests/integration/run-miltertest.sh /src/build && \
-    /src/tests/integration/run-miltertest-auth.sh /src/build && \
-    /src/tests/integration/run-miltertest-auth-redis.sh /src/build
+    /src/tests/run-all.sh /src/build
 
 # Run the real Postfix end-to-end test as root.
 USER root

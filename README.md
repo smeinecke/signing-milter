@@ -103,11 +103,15 @@ OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfi
 ```
 
 Redis TLS (`rediss://`) is supported when built with `WITH_REDIS_SSL=ON`.
+It uses TLS 1.2 or newer and never falls back to older protocol versions.
 `verify=peer` (the default) validates the server certificate chain and
 hostname/IP.  `verify=none` encrypts the connection without authenticating the
 server identity.  The expected identity defaults to the URI host; use
 `verify_name=hostname` to override it.  Use `sni=hostname` to set the TLS SNI
-extension without changing the verified identity.
+extension without changing the verified identity.  TLS query parameters are
+rejected for plaintext `redis://`.  IPv6 hosts must be bracketed:
+`rediss://[::1]:6380/0`.  The `cert=` file may include the leaf client
+certificate plus any required intermediates.
 
 The passphrase file is used for encrypted private keys loaded from Redis. When
 Redis is enabled, the milter queries Redis first; on a miss it falls back to the

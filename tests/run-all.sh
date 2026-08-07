@@ -30,4 +30,7 @@ echo "=== auth-signing integration tests (local CDB) ==="
 if command -v redis-server >/dev/null 2>&1; then
     echo "=== auth-signing integration tests (Redis) ==="
     "$SCRIPT_DIR/integration/run-miltertest-auth-redis.sh" "$BUILD_DIR"
+
+    echo "=== Redis TLS integration tests ==="
+    "$SCRIPT_DIR/integration/run-miltertest-redis-tls.sh" "$BUILD_DIR"
 fi
