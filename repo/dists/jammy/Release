@@ -1,26 +1,26 @@
 Codename: jammy
-Date: Thu, 06 Aug 2026 23:57:40 UTC
+Date: Fri, 07 Aug 2026 10:10:27 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
 MD5Sum:
- 69079ae77fb24dcb6b0f3aa6d074ae2e 846 main/binary-amd64/Packages
- 3cef48984d4dc7b08bbe290ca5333c18 550 main/binary-amd64/Packages.gz
+ 88a08d2c82c8d70d21aaad965b565d35 850 main/binary-amd64/Packages
+ 5cabcb833b958c2cec40287b109318a3 553 main/binary-amd64/Packages.gz
  53c75bd6fcaa598a1555a27baec99189 74 main/binary-amd64/Release
- a196635fba0bcdb5cc7cc3ddf9fcc4aa 846 main/binary-arm64/Packages
- 343fa2b0588fa895dc2facb865714b94 550 main/binary-arm64/Packages.gz
+ f5f263c382bee806654009f5f759908f 850 main/binary-arm64/Packages
+ 66ceadd9bb7fde928509a1152391b68b 550 main/binary-arm64/Packages.gz
  bb403eb7cb62dd8c4145d4e9e0a818bf 74 main/binary-arm64/Release
 SHA1:
- 52716e205000fe2aa7a107bb85e7879426c06101 846 main/binary-amd64/Packages
- 0b194596c3a59e006b6a9995c46559b7ea94c7e8 550 main/binary-amd64/Packages.gz
+ f16ccc90a4568dda5b5d1e52447823981fc85218 850 main/binary-amd64/Packages
+ 2b20ffcc951d9503a57ba9c327d3ed1a13f7c225 553 main/binary-amd64/Packages.gz
  8c9e6bb96cb420c4decf5f08598357158f2ba9a6 74 main/binary-amd64/Release
- d0d5db8f9bb1882f4b5c81acd2848b0c25c918b4 846 main/binary-arm64/Packages
- 872d2abd7f7ba3c31523ed2976da1d4b41c15602 550 main/binary-arm64/Packages.gz
+ e85d52861923b2518280a0ad12fd37f7bd635007 850 main/binary-arm64/Packages
+ 782df808e1278dca8e5d5675f78daa7bc736d973 550 main/binary-arm64/Packages.gz
  d875f2c30a33891ca530fb3211c81c603a5022ec 74 main/binary-arm64/Release
 SHA256:
- 7bc38d78f8d3927ade72682364280cf03f7c942d379fbe902b2f8ee4c16a103f 846 main/binary-amd64/Packages
- 40a999f1c98e59802c76f847049bcfe706efd59308c8ea8a097ede90d8a8217f 550 main/binary-amd64/Packages.gz
+ 00d3b38d11fb5d4f7e4c8fb8379eb0c9824a6f9052775274a6a74805fac10b6c 850 main/binary-amd64/Packages
+ 29405ee23d83a9dbb570eb378545ac229dd763a8b28aba0b2a2d98af47b4db87 553 main/binary-amd64/Packages.gz
  63b7757a5a7a97ae95a930c83335cd6345d1c7eab6f3b83a5648e3794b75b589 74 main/binary-amd64/Release
- 4d0633ecf4de536168d1dc57f35be618dcf39ab5d0b7cfa8f3164687559f0abd 846 main/binary-arm64/Packages
- e7767164e6c0f58f96d6c7624ac5b5a12b2d5af1e6bfafd9eec082fe966463b8 550 main/binary-arm64/Packages.gz
+ f062d0349c7d8ebcb76b279e42d6aa8f6d480df052c1c8b52d56885856feeaa9 850 main/binary-arm64/Packages
+ 79a1a99d71a1b10b1094b8c5470d5d4888839557555fc770494b9a5b8374b116 550 main/binary-arm64/Packages.gz
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
