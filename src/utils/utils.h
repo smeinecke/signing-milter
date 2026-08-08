@@ -25,14 +25,14 @@ extern void dict_close(DICT* dict);
 
 extern void dump_mailflags(int flags);
 extern void dump_pkcs7flags(int flags);
-extern int get_num_semicolons(const char* string);
+extern size_t get_num_semicolons(const char* string);
 extern char* hdrdup(const char* string);
 extern int headerchain2signingbuffer(SMFICTX* ctx, CTXDATA* ctxdata);
 extern int is_already_signed(const char* headerf, const char* headerv);
 extern int is_multipart_mime(const char* headerf, const char* headerv);
 
 extern NODE* get_last(NODE* node);
-extern NODE* appendnode(NODE** head, NODE* node);
+extern NODE* appendnode(NODE** head, NODE** tail, NODE* node);
 extern NODE* deletenode(NODE* node);
 extern void deletechain(NODE* node);
 

@@ -57,15 +57,15 @@ static int create_auth_cdb(const char* path, ...) {
     return 0;
 }
 
-static void test_no_auth_table_is_authorized(void** state) {
+static void test_no_auth_table_is_denied(void** state) {
 
     (void) state;
 
     opt_auth_signing_table = NULL;
     opt_redis_auth_signing_table = 0;
 
-    assert_int_equal(auth_signing_authorized("alice@example.org", "sender@example.com"), 1);
-    assert_int_equal(auth_signing_authorized(NULL, "sender@example.com"), 1);
+    assert_int_equal(auth_signing_authorized("alice@example.org", "sender@example.com"), 0);
+    assert_int_equal(auth_signing_authorized(NULL, "sender@example.com"), 0);
 }
 
 static void test_authorized_single_signer(void** state) {
@@ -312,7 +312,7 @@ static void test_normalize_address_safe(void** state) {
 int main(void) {
 
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_no_auth_table_is_authorized),
+        cmocka_unit_test(test_no_auth_table_is_denied),
         cmocka_unit_test(test_authorized_single_signer),
         cmocka_unit_test(test_multiple_signers_per_auth_identity),
         cmocka_unit_test(test_auth_identity_is_case_sensitive),

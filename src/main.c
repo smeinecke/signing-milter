@@ -1,3 +1,6 @@
+/* For fchownat/fchmodat/fstatat with AT_SYMLINK_NOFOLLOW */
+#define _GNU_SOURCE
+
 #include <unistd.h>
 
 #include "main.h"
@@ -62,6 +65,7 @@ int main(int argc, char** argv) {
     int            localsocket = 1;
     mode_t         socket_mode;
     const char*    socket_mode_str;
+    char*          redis_uri_arg = NULL;
 
 
     /*
@@ -144,6 +148,7 @@ int main(int argc, char** argv) {
             break;
         case 'r': /* Redis URI */
             opt_redis_uri = optarg;
+            redis_uri_arg = optarg;
             break;
         case 's': /* milter socket */
             opt_miltersocket = optarg;
@@ -283,25 +288,95 @@ int main(int argc, char** argv) {
     if (((p = strstr(opt_miltersocket, "inet")) != NULL) && opt_miltersocket == p)
         localsocket = 0;
 
+    /*
+     * The milter protocol has no peer authentication.  When a network socket is
+     * configured, it must be bound to loopback so it is not exposed to
+     * arbitrary clients.
+     */
+    if (localsocket == 0) {
+        const char* at = strrchr(opt_miltersocket, '@');
+        const char* host = at ? at + 1 : NULL;
+
+        if (host == NULL ||
+            !(strcmp(host, "127.0.0.1") == 0 ||
+              strcmp(host, "[::1]") == 0 ||
+              strcmp(host, "::1") == 0 ||
+              strcmp(host, "localhost") == 0 ||
+              strcmp(host, "localhost.localdomain") == 0)) {
+            logmsg(LOG_ERR, "milter network socket %s must be bound to a loopback address; use a Unix-domain socket for untrusted clients", opt_miltersocket);
+            exit(EX_DATAERR);
+        }
+    }
+
     if (localsocket == 1) {
+        const char* socket_path;
+        const char* socket_base;
+        char*       socket_path_copy = NULL;
+        char*       slash;
+        const char* socket_dir;
+        int         socket_dirfd;
+
         /* open the socket */
         if (smfi_opensocket(REMOVE_EXISTING_SOCKETS) != MI_SUCCESS) {
             logmsg(LOG_ERR, "could not open milter socket %s", opt_miltersocket);
             exit(EX_SOFTWARE);
         }
-        /* test whether the socket now exists */
-        p = opt_miltersocket + strlen("local:");
-        if (stat(p, &st) < 0) {
-            p = opt_miltersocket + strlen("unix:");
-            if (stat(p, &st) < 0) {
-                logmsg(LOG_ERR, "miltersocket does not exist: %m", strerror(errno));
-                exit(EX_DATAERR);
-            }
+
+        /*
+         * Resolve the socket path unambiguously from the libmilter socket
+         * specification (CWE-367 / prefix confusion).
+         */
+        if (strncmp(opt_miltersocket, "local:", 6) == 0)
+            socket_path = opt_miltersocket + 6;
+        else if (strncmp(opt_miltersocket, "unix:", 5) == 0)
+            socket_path = opt_miltersocket + 5;
+        else {
+            logmsg(LOG_ERR, "milter socket is not a local/unix socket: %s", opt_miltersocket);
+            exit(EX_DATAERR);
+        }
+
+        socket_path_copy = strdup(socket_path);
+        if (socket_path_copy == NULL) {
+            logmsg(LOG_ERR, "strdup(socket_path) failed: %s", strerror(errno));
+            exit(EX_SOFTWARE);
+        }
+
+        slash = strrchr(socket_path_copy, '/');
+        if (slash != NULL) {
+            *slash = '\0';
+            socket_dir = socket_path_copy;
+            socket_base = slash + 1;
+        } else {
+            socket_dir = ".";
+            socket_base = socket_path_copy;
+        }
+
+        socket_dirfd = open(socket_dir, O_RDONLY | O_DIRECTORY);
+        if (socket_dirfd < 0) {
+            logmsg(LOG_ERR, "could not open socket directory %s: %s", socket_dir, strerror(errno));
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+
+        /* Verify the created object is actually a socket and was not replaced. */
+        if (fstatat(socket_dirfd, socket_base, &st, AT_SYMLINK_NOFOLLOW) < 0) {
+            logmsg(LOG_ERR, "milter socket does not exist: %s", strerror(errno));
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+        if (!S_ISSOCK(st.st_mode)) {
+            logmsg(LOG_ERR, "milter socket path is not a socket: %s", socket_path);
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_DATAERR);
         }
 
         /* gid of the root group */
         if ((gr = getgrnam("root")) == NULL) {
             logmsg(LOG_ERR, "unknown rootgroup: getgrnam(root) failed");
+            close(socket_dirfd);
+            free(socket_path_copy);
             exit(EX_SOFTWARE);
         }
         root_gid = gr->gr_gid;
@@ -309,15 +384,12 @@ int main(int argc, char** argv) {
         /* clientgroup must be != root and != opt_group */
         if (((client_gid == gid) || (client_gid == root_gid)) && (opt_clientgroup != NULL) && strcmp(opt_clientgroup, ":relax") != 0) {
             logmsg(LOG_ERR, "clientgroup %s must be neither %s nor %s", opt_clientgroup, "root", opt_group);
+            close(socket_dirfd);
+            free(socket_path_copy);
             exit(EX_DATAERR);
         }
 
-        /* now set the permissions */
-        if (chown(p, uid, client_gid) != 0) {
-            logmsg(LOG_ERR, "chown(%s, %i, %i) failed: %m", p, uid, client_gid, strerror(errno));
-            exit(EX_SOFTWARE);
-        }
-
+        /* now set the permissions, bound to the directory fd and without following symlinks */
         socket_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
         socket_mode_str = "0660";
         if ((opt_clientgroup != NULL) && strcmp(opt_clientgroup, ":relax") == 0) {
@@ -326,12 +398,24 @@ int main(int argc, char** argv) {
             socket_mode_str = "0666";
         }
 
-        if (chmod(p, socket_mode) != 0) {
-            logmsg(LOG_ERR, "chmod(%s, %s) failed: %m", p, socket_mode_str, strerror(errno));
+        if (fchownat(socket_dirfd, socket_base, uid, client_gid, AT_SYMLINK_NOFOLLOW) != 0) {
+            logmsg(LOG_ERR, "fchownat(%s, %i, %i) failed: %s", socket_path, (int)uid, (int)client_gid, strerror(errno));
+            close(socket_dirfd);
+            free(socket_path_copy);
             exit(EX_SOFTWARE);
         }
 
-        logmsg(LOG_INFO, "changed socket %s to owner/group: %i/%i, mode: %s", opt_miltersocket, uid, client_gid, socket_mode_str);
+        if (fchmodat(socket_dirfd, socket_base, socket_mode, AT_SYMLINK_NOFOLLOW) != 0) {
+            logmsg(LOG_ERR, "fchmodat(%s, %s) failed: %s", socket_path, socket_mode_str, strerror(errno));
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_SOFTWARE);
+        }
+
+        close(socket_dirfd);
+        free(socket_path_copy);
+
+        logmsg(LOG_INFO, "changed socket %s to owner/group: %i/%i, mode: %s", opt_miltersocket, (int)uid, (int)client_gid, socket_mode_str);
     }
 
     /* set gid/uid */
@@ -415,6 +499,20 @@ int main(int argc, char** argv) {
 
     if (redis_global_init() < 0)
         exit(EX_SOFTWARE);
+
+    /*
+     * Redis credentials embedded in the URI are now parsed into g_uri.
+     * Redact the original command-line argument so it is not visible to
+     * other local users via /proc/<pid>/cmdline (CWE-798).
+     */
+    if (redis_uri_arg != NULL && *redis_uri_arg != '\0') {
+        size_t len = strlen(redis_uri_arg);
+        if (len > 0) {
+            redis_uri_arg[0] = 'x';
+            if (len > 1)
+                memset(redis_uri_arg + 1, '\0', len - 1);
+        }
+    }
 
     /* initialize OpenSSL */
     SSL_library_init();

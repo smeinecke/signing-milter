@@ -1,5 +1,6 @@
 .github/workflows/build.yml
 /.logs/
+/.venv/
 
 /build*
 /obj-*

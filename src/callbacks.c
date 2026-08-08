@@ -4,6 +4,48 @@
 
 #include "auth_signing.h"
 
+/*
+ * Bound the number and aggregate allocated size of retained Content-*
+ * headers.  Returns non-zero if appending another header would exceed the
+ * configured per-message limits (CWE-400/CWE-407).
+ */
+static int headerchain_would_exceed(const CTXDATA* ctxdata,
+                                    const char* headerf,
+                                    const char* headerv) {
+    size_t hf_len;
+    size_t hv_len;
+    size_t num_semicolon;
+    size_t add = 0;
+    size_t need;
+
+    if (ctxdata->headerchain_count >= MAX_HEADER_CHAIN_NODES)
+        return 1;
+
+    if (headerf == NULL || headerv == NULL)
+        return 1;
+
+    hf_len = strlen(headerf) + 1;
+    hv_len = strlen(headerv);
+
+    num_semicolon = get_num_semicolons(headerv);
+    if (num_semicolon == (size_t)-1)
+        return 1;
+
+    /* break_after_semicolon expands only when the value is long enough. */
+    if (num_semicolon > 0 && hv_len >= 70)
+        add = num_semicolon * (size_t)PHASE_PRE_SIGN;
+
+    /* node + field + value + terminator + expansion */
+    need = sizeof(NODE) + hf_len + (hv_len + 1) + add;
+    if (need < hf_len || need < add)
+        return 1;
+
+    if (ctxdata->headerchain_bytes > MAX_HEADER_CHAIN_BYTES - need)
+        return 1;
+
+    return 0;
+}
+
 static char* get_auth_identity(SMFICTX* ctx) {
 
     const char* raw;
@@ -84,8 +126,7 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
     CTXDATA*       ctxdata = NULL;
     const char*    daemon_name;
     int            i;
-    int            auth_rc = 1;
-    int            auth_configured;
+    int            auth_rc = 0;
     char*          auth_identity = NULL;
 
     char*          redis_pem = NULL;
@@ -107,31 +148,32 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
      */
     logmsg(LOG_DEBUG, "MAIL FROM: '%s' (via %s)", argv[0], daemon_name);
 
-    auth_configured = (opt_auth_signing_table != NULL) || opt_redis_auth_signing_table;
-
     if (dict_reload(&dict_signingtable) < 0) {
         logmsg(LOG_ERR, "callback_envfrom: signing table reload failed");
         return SMFIS_TEMPFAIL;
     }
 
-    if (auth_configured) {
-        auth_identity = get_auth_identity(ctx);
-        auth_rc = auth_signing_authorized(auth_identity, argv[0]);
-        if (auth_rc == -1) {
-            logmsg(LOG_ERR, "callback_envfrom: auth_signing_authorized() failed");
+    /*
+     * Every signing request must be bound to a trustworthy authenticated
+     * principal.  Absence of an authorization table is not a blank check
+     * (CWE-862).
+     */
+    auth_identity = get_auth_identity(ctx);
+    auth_rc = auth_signing_authorized(auth_identity, argv[0]);
+    if (auth_rc == -1) {
+        logmsg(LOG_ERR, "callback_envfrom: auth_signing_authorized() failed");
+        free(auth_identity);
+        return SMFIS_TEMPFAIL;
+    }
+    if (auth_rc == 0) {
+        if (!opt_signerfromheader) {
+            logmsg(LOG_INFO, "callback_envfrom: authenticated identity '%s' not authorized for signer '%s'; mail will not be signed",
+                   auth_identity ? auth_identity : "(none)", argv[0]);
             free(auth_identity);
-            return SMFIS_TEMPFAIL;
+            return SMFIS_CONTINUE;
         }
-        if (auth_rc == 0) {
-            if (!opt_signerfromheader) {
-                logmsg(LOG_INFO, "callback_envfrom: authenticated identity '%s' not authorized for signer '%s'",
-                       auth_identity ? auth_identity : "(none)", argv[0]);
-                free(auth_identity);
-                return SMFIS_ACCEPT;
-            }
-            /* wait for an X-Signer header; do not fetch signing material now */
-            lookup_needed = 0;
-        }
+        /* wait for an X-Signer header; do not fetch signing material now */
+        lookup_needed = 0;
     }
 
     if (lookup_needed) {
@@ -158,9 +200,9 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
                 if (opt_signerfromheader) {
                     logmsg(LOG_DEBUG, "no cert for envsender, will look for '%s'", HEADERNAME_SIGNER);
                 } else {
-                    logmsg(LOG_INFO, "no signingdata for '%s'", argv[0]);
+                    logmsg(LOG_INFO, "no signingdata for '%s'; mail will not be signed", argv[0]);
                     free(auth_identity);
-                    return SMFIS_ACCEPT;
+                    return SMFIS_CONTINUE;
                 }
             }
         }
@@ -258,15 +300,12 @@ sfsistat callback_envrcpt(SMFICTX* ctx, char** argv) {
     if (mode_rc == 1 && *mode_value != '\0') {
         /*
          * Recipient found in the mode table.
-         * The result applies to *all* recipients.
          */
         logmsg(LOG_DEBUG, "callback_envrcpt: %s found in modetable: value='%s'", argv[0], mode_value);
 
         if (strstr(mode_value, "skip") != NULL) {
-            logmsg(LOG_INFO, "modetable hit: skip signing for %s", argv[0]);
-            /* ctxdata is owned by the milter context and is cleaned up
-             * in callback_envfrom or callback_close.  No extra free here. */
-            return SMFIS_ACCEPT;
+            logmsg(LOG_INFO, "modetable hit: skip signing requested for %s", argv[0]);
+            ctxdata->rcpt_skip_count++;
         }
         if (strstr(mode_value, "opaque") != NULL) {
             logmsg(LOG_DEBUG, "callback_envrcpt: opaque signingmode enabled for %s", argv[0]);
@@ -281,6 +320,8 @@ sfsistat callback_envrcpt(SMFICTX* ctx, char** argv) {
             }
         }
     }
+
+    ctxdata->rcpt_count++;
     dump_mailflags(ctxdata->mailflags);
     dump_pkcs7flags(ctxdata->pkcs7flags);
     return SMFIS_CONTINUE;
@@ -323,12 +364,15 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
     if (strncasecmp(headerf, "content-", 8) == 0) {
 
         /*
-         * Already signed messages do not need to be
-         * processed further
+         * A syntactic Content-Type declaration is not a trustworthy
+         * proof of a valid S/MIME signature (CWE-345).  Continue
+         * processing under the configured signing policy instead of
+         * accepting the message solely based on attacker-controllable
+         * MIME metadata.
          */
         if (is_already_signed(headerf, headerv)) {
-            logmsg(LOG_NOTICE, "mail seemes already signed.");
-            return SMFIS_ACCEPT;
+            logmsg(LOG_NOTICE, "%s: mail declares a pre-existing S/MIME signature; continuing with milter policy",
+                   ctxdata->queueid);
         }
 
         if (is_multipart_mime(headerf, headerv)) {
@@ -336,11 +380,19 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
             ctxdata->mailflags |= MF_TYPE_MULTIPART;
         }
 
+        if (headerchain_would_exceed(ctxdata, headerf, headerv)) {
+            logmsg(LOG_ERR, "%s: error: callback_header: header chain budget exceeded",
+                   ctxdata->queueid);
+            return SMFIS_TEMPFAIL;
+        }
+
         if ((n = newnode(headerf, headerv, PHASE_PRE_SIGN)) == NULL) {
             logmsg(LOG_ERR, "error: callback_header: alloc new node failed");
             return SMFIS_TEMPFAIL;
         }
-        appendnode(&(ctxdata->headerchain), n);
+        appendnode(&(ctxdata->headerchain), &(ctxdata->headerchain_tail), n);
+        ctxdata->headerchain_count++;
+        ctxdata->headerchain_bytes += sizeof(NODE) + strlen(n->headerf) + 1 + strlen(n->headerv) + 1;
     }
 
     if (!opt_signerfromheader)
@@ -350,40 +402,39 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
 
         char           signing_value[4096];
         int            lookup_rc = 0;
-        int            auth_rc = 1;
+        int            auth_rc;
         char*          redis_pem = NULL;
         size_t         redis_pem_len = 0;
         char*          redis_chain = NULL;
         size_t         redis_chain_len = 0;
         int            redis_found = 0;
         int            i;
-        int            auth_configured;
 
         logmsg(LOG_DEBUG, "callback_header: signerfrom_header: %s", headerv);
-
-        auth_configured = (opt_auth_signing_table != NULL) || opt_redis_auth_signing_table;
 
         if (dict_reload(&dict_signingtable) < 0) {
             logmsg(LOG_ERR, "callback_header: signing table reload failed");
             return SMFIS_TEMPFAIL;
         }
 
-        if (auth_configured) {
-            auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv);
-            if (auth_rc == -1) {
-                logmsg(LOG_ERR, "callback_header: auth_signing_authorized() failed");
-                free(redis_pem);
-                free(redis_chain);
-                return SMFIS_TEMPFAIL;
-            }
-            if (auth_rc == 0) {
-                logmsg(LOG_INFO, "callback_header: X-Signer '%s' not authorized for authenticated identity '%s'",
-                       headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
-                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER | MF_SKIP_SIGNING;
-                free(redis_pem);
-                free(redis_chain);
-                return SMFIS_CONTINUE;
-            }
+        /*
+         * X-Signer is a control header and must not be trusted without an
+         * explicit authorization binding (CWE-807).
+         */
+        auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv);
+        if (auth_rc == -1) {
+            logmsg(LOG_ERR, "callback_header: auth_signing_authorized() failed");
+            free(redis_pem);
+            free(redis_chain);
+            return SMFIS_TEMPFAIL;
+        }
+        if (auth_rc == 0) {
+            logmsg(LOG_NOTICE, "%s: X-Signer '%s' not authorized for authenticated identity '%s'; mail will not be signed",
+                   ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
+            ctxdata->mailflags |= MF_SIGNER_FROM_HEADER | MF_SKIP_SIGNING;
+            free(redis_pem);
+            free(redis_chain);
+            return SMFIS_CONTINUE;
         }
 
         if (opt_redis_uri != NULL && *opt_redis_uri != '\0') {
@@ -408,16 +459,11 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
                 return SMFIS_TEMPFAIL;
             }
             if (lookup_rc == 0) {
-                logmsg(LOG_INFO, "no signingdata for %s", headerv);
-                if (auth_configured) {
-                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER | MF_SKIP_SIGNING;
-                    free(redis_pem);
-                    free(redis_chain);
-                    return SMFIS_CONTINUE;
-                }
+                logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; will skip signing", ctxdata->queueid, headerv);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER | MF_SKIP_SIGNING;
                 free(redis_pem);
                 free(redis_chain);
-                return SMFIS_ACCEPT;
+                return SMFIS_CONTINUE;
             }
         }
 
@@ -453,10 +499,12 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
 
     if (strcasecmp(headerf, HEADERNAME_SKIP_SIGNING) == 0) {
         /*
-         * we can't simply 'return SMFIS_ACCEPT' as we must remove the header later
+         * X-Skip-Signing is untrusted message-controlled policy.  Record that
+         * we saw it so it can be stripped, but do not honor the skip request
+         * (CWE-807).
          */
-        ctxdata->mailflags |= MF_SKIP_SIGNING;
-        logmsg(LOG_DEBUG, "callback_header: header %s found: skip signing", headerf);
+        ctxdata->skip_signing_header_seen = 1;
+        logmsg(LOG_INFO, "%s: ignoring untrusted %s header", ctxdata->queueid, headerf);
     }
 
     return SMFIS_CONTINUE;
@@ -486,8 +534,28 @@ sfsistat callback_eoh(SMFICTX* ctx) {
         }
     }
 
+    /*
+     * Do not let a single skip-mode recipient suppress signing for every
+     * recipient.  Only skip if all recipients are marked skip (CWE-284).
+     */
+    if (ctxdata->rcpt_count > 0 &&
+        ctxdata->rcpt_skip_count == ctxdata->rcpt_count) {
+        logmsg(LOG_INFO, "%s: all %zu recipients requested skip signing", ctxdata->queueid, ctxdata->rcpt_count);
+        ctxdata->mailflags |= MF_SKIP_SIGNING;
+    }
+
+    /*
+     * If no signing material has been loaded (unauthorized sender, missing
+     * certificate, or X-Signer not found), fall through without signing.
+     */
+    if (ctxdata->cert == NULL &&
+        (ctxdata->mailflags & MF_SIGNER_FROM_HEADER) == 0) {
+        logmsg(LOG_INFO, "%s: no signing material loaded; skip signing", ctxdata->queueid);
+        ctxdata->mailflags |= MF_SKIP_SIGNING;
+    }
+
     if (ctxdata->mailflags & MF_SKIP_SIGNING) {
-       logmsg(LOG_INFO, "%s: skip signing requested by header", ctxdata->queueid);
+       logmsg(LOG_INFO, "%s: skip signing requested", ctxdata->queueid);
        return SMFIS_CONTINUE;
     }
 
@@ -516,11 +584,19 @@ sfsistat callback_eoh(SMFICTX* ctx) {
 
         logmsg(LOG_WARNING, "%s: malformed Content: 'MIME-Version' header but no 'Content-*' header found. Please read RFC 2045, Section 5.2. Adding '%s: %s'" , ctxdata->queueid, headerf, headerv);
 
+        if (headerchain_would_exceed(ctxdata, headerf, headerv)) {
+            logmsg(LOG_ERR, "%s: error: callback_eoh: header chain budget exceeded",
+                   ctxdata->queueid);
+            return SMFIS_TEMPFAIL;
+        }
+
         if ((n = newnode(headerf, headerv, PHASE_PRE_SIGN)) == NULL) {
             logmsg(LOG_ERR, "error: callback_eoh: alloc new node failed");
             return SMFIS_TEMPFAIL;
         }
-        appendnode(&(ctxdata->headerchain), n);
+        appendnode(&(ctxdata->headerchain), &(ctxdata->headerchain_tail), n);
+        ctxdata->headerchain_count++;
+        ctxdata->headerchain_bytes += sizeof(NODE) + strlen(n->headerf) + 1 + strlen(n->headerv) + 1;
     }
 
     dump_mailflags(ctxdata->mailflags);
@@ -608,10 +684,22 @@ sfsistat callback_eom(SMFICTX* ctx) {
                 logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SIGNER);
             }
         }
+        if (ctxdata->skip_signing_header_seen) {
+            if (smfi_chgheader(ctx, HEADERNAME_SKIP_SIGNING, 0, NULL) != MI_SUCCESS) {
+                logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SKIP_SIGNING);
+            }
+        }
+       return SMFIS_CONTINUE;
+    }
+
+    /*
+     * X-Skip-Signing may have been ignored, but the header still has to be
+     * stripped so it is not visible in the delivered message.
+     */
+    if (ctxdata->skip_signing_header_seen) {
         if (smfi_chgheader(ctx, HEADERNAME_SKIP_SIGNING, 0, NULL) != MI_SUCCESS) {
             logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SKIP_SIGNING);
         }
-       return SMFIS_CONTINUE;
     }
 
     /*

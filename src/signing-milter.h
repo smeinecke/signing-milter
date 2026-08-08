@@ -52,6 +52,14 @@ typedef struct DICT {
 #define MAX_MESSAGE_SIZE (64 * 1024 * 1024)
 
 /*
+ * Bound the number and aggregate size of retained Content-* headers to
+ * prevent a remote message author from exhausting worker memory or
+ * spending quadratic time in list appends (CWE-400/CWE-407).
+ */
+#define MAX_HEADER_CHAIN_NODES  1024
+#define MAX_HEADER_CHAIN_BYTES  (1024 * 1024)
+
+/*
  * Maximum Redis-returned PEM and certificate chain sizes we are willing
  * to allocate.  These are intentionally generous but bounded to prevent
  * a compromised or misconfigured Redis from causing unbounded allocation.
@@ -91,6 +99,16 @@ struct ctxdata {
     int             first_bodychunk_seen;
     const char*     keepdir;
     char*           auth_identity;
+
+    /* header chain tail and resource budget tracking */
+    NODE*           headerchain_tail;
+    size_t          headerchain_count;
+    size_t          headerchain_bytes;
+
+    /* per-recipient mode-table decisions and untrusted control header tracking */
+    size_t          rcpt_count;
+    size_t          rcpt_skip_count;
+    int             skip_signing_header_seen;
 };
 #define CTXDATA struct ctxdata
 

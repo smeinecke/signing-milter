@@ -1,7 +1,7 @@
 #include "is_already_signed.h"
 
 static const char* skip_whitespace(const char* s) {
-    while (*s == ' ' || *s == '\t')
+    while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n')
         s++;
     return s;
 }
@@ -44,9 +44,13 @@ int is_already_signed(const char* headerf, const char* headerv) {
         const char* val;
         size_t val_len;
         int quoted;
+        const char* q_start = q;
 
-        /* skip separator and whitespace */
-        while (*q == ' ' || *q == '\t' || *q == ';')
+        /*
+         * skip separator and whitespace, including RFC 822 / RFC 2822
+         * folded line breaks (CRLF optionally followed by WSP).
+         */
+        while (*q == ' ' || *q == '\t' || *q == ';' || *q == '\r' || *q == '\n')
             q++;
         if (*q == '\0')
             break;
@@ -59,8 +63,16 @@ int is_already_signed(const char* headerf, const char* headerv) {
 
         q = attr_end;
         q = skip_whitespace(q);
-        if (*q != '=')
+        if (*q != '=') {
+            /*
+             * Defensive progress guard: if the parser consumed nothing,
+             * something is malformed and we must terminate to avoid an
+             * infinite loop (CWE-835).
+             */
+            if (q == q_start)
+                return (0);
             continue;
+        }
         q++;
         q = skip_whitespace(q);
 

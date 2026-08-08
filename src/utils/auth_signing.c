@@ -28,10 +28,12 @@ int auth_signing_authorized(const char* auth_identity, const char* signer_identi
     int  rc;
 
     /*
-     * If no authorization table is configured, signing is not restricted.
+     * Signing is a privileged operation and must be bound to a trustworthy
+     * authenticated principal.  Without an authorization table, no signer is
+     * permitted (CWE-862).
      */
     if (opt_auth_signing_table == NULL && !opt_redis_auth_signing_table)
-        return 1;
+        return 0;
 
     if (auth_identity == NULL || *auth_identity == '\0' ||
         signer_identity == NULL || *signer_identity == '\0')

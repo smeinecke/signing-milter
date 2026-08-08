@@ -74,6 +74,8 @@ class RedisTlsTest:
         self.server_v6_key = os.path.join(self.work, "server-v6-key.pem")
         self.server_dns_cert = os.path.join(self.work, "server-dns-cert.pem")
         self.server_dns_key = os.path.join(self.work, "server-dns-key.pem")
+        self.authsigningtable_txt = os.path.join(self.work, "authsigningtable")
+        self.authsigningtable_cdb = os.path.join(self.work, "authsigningtable.cdb")
 
         self._generate_certs()
 
@@ -256,7 +258,9 @@ class RedisTlsTest:
         group = run(["id", "-gn"], check=True).stdout.strip()
         p = subprocess.Popen(
             [MILTER_BIN, "-u", user, "-g", group, "-c", ":relax",
-             "-s", f"unix:{sock}", "-l", "-d", "7", "-r", uri, "-P", "signing-milter:"],
+             "-s", f"unix:{sock}", "-l", "-d", "7",
+             "-a", self.authsigningtable_cdb,
+             "-r", uri, "-P", "signing-milter:"],
             stdout=open(log, "w"), stderr=subprocess.STDOUT,
         )
         self.milter_procs.append(p)
@@ -282,6 +286,7 @@ class RedisTlsTest:
             s.connect(sock_path)
             mc = client.MilterConnection(s)
             mc.optneg_mta()
+            mc.send_macro(constants.SMFIC_MAIL, **{"{auth_authen}": "testuser"})
             return mc.send_get(constants.SMFIC_MAIL, args=[sender])[0]
 
     def assert_reply(self, name, expected, actual):
@@ -344,6 +349,11 @@ class RedisTlsTest:
         with open(os.path.join(cert_dir, "test-cert+key.pem")) as f:
             signing_pem = f.read()
 
+        # signing-milter now requires an auth-signing table for Redis-backed signing.
+        with open(self.authsigningtable_txt, "w") as f:
+            f.write("testuser\tsender@example.com\n")
+        run(["cdb", "-c", "-m", self.authsigningtable_cdb, self.authsigningtable_txt], check=True)
+
         # Scenario 1: trusted CA + correct hostname + verify=peer -> success
         port1 = 16380
         self.start_redis(port1, self.server_cert, self.server_key, ca=self.ca_cert)
@@ -367,13 +377,6 @@ class RedisTlsTest:
             f"rediss://localhost:{port2}/0?verify=peer&cacert={self.ca_cert}")
         r = self.mailfrom_reply(sock)
         self.assert_reply("untrusted self-signed + verify=peer", constants.SMFIR_TEMPFAIL, r)
-
-        # Scenario 4: verify=none with self-signed -> success
-        sock, _ = self.start_milter(
-            f"rediss://localhost:{port2}/0?verify=none")
-        r = self.mailfrom_reply(sock)
-        if r not in (constants.SMFIR_CONTINUE, constants.SMFIR_ACCEPT):
-            raise AssertionError(f"verify=none with self-signed: expected CONTINUE/ACCEPT, got {r}")
 
         # Scenario 5: valid mTLS with intermediate client cert chain -> success
         port3 = 16382
@@ -463,7 +466,7 @@ class RedisTlsTest:
             return
 
         sock, _ = self.start_milter(
-            f"rediss://127.0.0.1:{port}/0?verify=none")
+            f"rediss://127.0.0.1:{port}/0?verify=peer&cacert={self.ca_cert}")
         t0 = time.time()
         r = self.mailfrom_reply(sock)
         elapsed = time.time() - t0
@@ -489,7 +492,7 @@ class RedisTlsTest:
         t.start()
 
         sock, _ = self.start_milter(
-            f"rediss://127.0.0.1:{port}/0?verify=none")
+            f"rediss://127.0.0.1:{port}/0?verify=peer&cacert={self.ca_cert}")
         t0 = time.time()
         r = self.mailfrom_reply(sock)
         elapsed = time.time() - t0

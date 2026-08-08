@@ -20,22 +20,44 @@
  */
 char* break_after_semicolon(char* string, int phase) {
 
-    int    num_semicolon = -1;
-    char*  new_string;
-    char*  p_old;
-    char*  p_new;
+    size_t     num_semicolon;
+    size_t     orig_len;
+    size_t     add;
+    size_t     need;
+    char*      new_string;
+    char*      p_old;
+    char*      p_new;
 
-    if ((num_semicolon = get_num_semicolons(string)) < 0) {
+    if (string == NULL) {
+        logmsg(LOG_ERR, "FATAL: break_after_semicolon: got NULL string");
         return(NULL);
     }
 
-    if (!num_semicolon) {
+    num_semicolon = get_num_semicolons(string);
+    if (num_semicolon == (size_t)-1)
+        return(NULL);
+
+    if (num_semicolon == 0) {
         /* no semicolons in string */
         return (string);
     }
 
-    /* per semicolon 2 or 3 additional bytes + one space (or empty?) */
-    if ((new_string = malloc(strlen(string) + (num_semicolon*phase) + 1)) == NULL) {
+    orig_len = strlen(string);
+
+    /*
+     * Each semicolon adds `phase' additional bytes.  Compute the total
+     * additional size using unsigned arithmetic with an explicit overflow
+     * check (CWE-190).
+     */
+    if (num_semicolon > SIZE_MAX / (size_t)phase)
+        return(NULL);
+    add = num_semicolon * (size_t)phase;
+
+    if (add > SIZE_MAX - orig_len - 1)
+        return(NULL);
+    need = orig_len + add + 1;
+
+    if ((new_string = malloc(need)) == NULL) {
         logmsg(LOG_ERR, "FATAL: break_after_semicolon: malloc failed");
         return(NULL);
     }

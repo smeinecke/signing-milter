@@ -15,19 +15,21 @@ NODE* get_last(NODE* node) {
 
 /*
  * this adds a node to the end of the list. You must allocate a node and
- * then pass its address to this function
+ * then pass its address to this function.
+ * A tail pointer is maintained so appending is O(1) regardless of the
+ * current list length.
  */
-NODE* appendnode(NODE** head, NODE* node) {
-
-    NODE* end;
+NODE* appendnode(NODE** head, NODE** tail, NODE* node) {
 
     assert(node != NULL);
-    if (*head == NULL)
+    node->next = NULL;
+    if (*head == NULL) {
         *head = node;
-    else {
-        end = get_last(*head);
-        end->next = node;    /* link in the new node to the end of the list */
-        node->next = NULL;   /* set next field to signify the end of list   */
+        *tail = node;
+    } else {
+        assert(*tail != NULL);
+        (*tail)->next = node; /* link in the new node to the end of the list */
+        *tail = node;         /* update tail pointer                       */
     }
     return (*head);
 }

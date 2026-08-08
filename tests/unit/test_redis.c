@@ -13,10 +13,14 @@
 
 extern const char* opt_redis_uri;
 
-static void test_plain_ipv6_uri(void** state) {
+static void test_plain_tcp_rejected(void** state) {
     (void) state;
     opt_redis_uri = "redis://[::1]:6379/0";
-    assert_int_equal(redis_global_init(), 0);
+    assert_int_equal(redis_global_init(), -1);
+    redis_global_cleanup();
+
+    opt_redis_uri = "redis://127.0.0.1:6379/0";
+    assert_int_equal(redis_global_init(), -1);
     redis_global_cleanup();
 }
 
@@ -95,11 +99,15 @@ static void test_valid_db_and_trailing_slash(void** state) {
     (void) state;
 
     opt_redis_uri = "redis://[::1]:6379/";
-    assert_int_equal(redis_global_init(), 0);
+    assert_int_equal(redis_global_init(), -1);
     redis_global_cleanup();
 
 #ifdef WITH_REDIS_SSL
     opt_redis_uri = "rediss://127.0.0.1:6380/?verify=none";
+    assert_int_equal(redis_global_init(), -1);
+    redis_global_cleanup();
+
+    opt_redis_uri = "rediss://127.0.0.1:6380/?verify=peer";
     assert_int_equal(redis_global_init(), 0);
     redis_global_cleanup();
 #endif
@@ -123,10 +131,10 @@ static void test_cert_key_mismatch_rejected(void** state) {
 }
 
 #ifdef WITH_REDIS_SSL
-static void test_tls_ipv6_uri_verify_none(void** state) {
+static void test_tls_ipv6_verify_none_rejected(void** state) {
     (void) state;
     opt_redis_uri = "rediss://[2001:db8::1]:6380/0?verify=none";
-    assert_int_equal(redis_global_init(), 0);
+    assert_int_equal(redis_global_init(), -1);
     redis_global_cleanup();
 }
 
@@ -144,7 +152,7 @@ static void test_invalid_verify_mode_rejected(void** state) {
 
 int main(void) {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_plain_ipv6_uri),
+        cmocka_unit_test(test_plain_tcp_rejected),
         cmocka_unit_test(test_plaintext_tls_params_rejected),
         cmocka_unit_test(test_malformed_ipv6_rejected),
         cmocka_unit_test(test_invalid_port_rejected),
@@ -152,7 +160,7 @@ int main(void) {
         cmocka_unit_test(test_valid_db_and_trailing_slash),
         cmocka_unit_test(test_cert_key_mismatch_rejected),
 #ifdef WITH_REDIS_SSL
-        cmocka_unit_test(test_tls_ipv6_uri_verify_none),
+        cmocka_unit_test(test_tls_ipv6_verify_none_rejected),
         cmocka_unit_test(test_invalid_verify_mode_rejected),
 #endif
     };

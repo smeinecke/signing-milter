@@ -12,27 +12,27 @@
 
 static void test_zero(void** state) {
     (void) state;
-    assert_int_equal(get_num_semicolons("text/plain"), 0);
+    assert_true(get_num_semicolons("text/plain") == 0);
 }
 
 static void test_one(void** state) {
     (void) state;
-    assert_int_equal(get_num_semicolons("text/plain; charset=utf-8"), 1);
+    assert_true(get_num_semicolons("text/plain; charset=utf-8") == 1);
 }
 
 static void test_multiple(void** state) {
     (void) state;
-    assert_int_equal(get_num_semicolons("a;b;c;d"), 3);
+    assert_true(get_num_semicolons("a;b;c;d") == 3);
 }
 
 static void test_null(void** state) {
     (void) state;
-    assert_int_equal(get_num_semicolons(NULL), -1);
+    assert_true(get_num_semicolons(NULL) == (size_t)-1);
 }
 
 static void test_empty(void** state) {
     (void) state;
-    assert_int_equal(get_num_semicolons(""), 0);
+    assert_true(get_num_semicolons("") == 0);
 }
 
 int main(void) {

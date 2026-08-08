@@ -27,6 +27,7 @@ static int redis_tls_initialized = 0;
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509_vfy.h>
+#include <openssl/x509v3.h>
 
 #define TLS_VERIFY_NONE 0
 #define TLS_VERIFY_PEER 1
@@ -198,12 +199,10 @@ static int redis_parse_tls_query(const char* query) {
                 return -1;
             }
             seen |= SEEN_VERIFY;
-            if (strcmp(val, "none") == 0)
-                g_uri.tls_verify = TLS_VERIFY_NONE;
-            else if (strcmp(val, "peer") == 0)
+            if (strcmp(val, "peer") == 0)
                 g_uri.tls_verify = TLS_VERIFY_PEER;
             else {
-                logmsg(LOG_ERR, "redis: invalid TLS verify mode '%s' (URI redacted)", val);
+                logmsg(LOG_ERR, "redis: invalid TLS verify mode '%s'; only 'peer' is permitted (URI redacted)", val);
                 free(buf);
                 return -1;
             }
@@ -701,6 +700,39 @@ static redisContext* redis_do_connect(void) {
             redisFree(c);
             return NULL;
         }
+
+        /*
+         * OpenSSL's SSL_VERIFY_PEER only guarantees a trusted chain; hostname
+         * identity must be verified explicitly (CWE-297).
+         */
+        if (g_uri.tls_verify == TLS_VERIFY_PEER) {
+            long verify_result = SSL_get_verify_result(ssl);
+            if (verify_result != X509_V_OK) {
+                logmsg(LOG_ERR, "redis: TLS peer verification failed: %s",
+                       X509_verify_cert_error_string(verify_result));
+                SSL_free(ssl);
+                redisFree(c);
+                return NULL;
+            }
+
+            if (!redis_host_is_ip(verify_name)) {
+                X509* cert = SSL_get1_peer_certificate(ssl);
+                if (cert == NULL) {
+                    logmsg(LOG_ERR, "redis: no peer certificate presented");
+                    SSL_free(ssl);
+                    redisFree(c);
+                    return NULL;
+                }
+                if (X509_check_host(cert, verify_name, strlen(verify_name), 0, NULL) != 1) {
+                    logmsg(LOG_ERR, "redis: TLS certificate does not match hostname '%s'", verify_name);
+                    X509_free(cert);
+                    SSL_free(ssl);
+                    redisFree(c);
+                    return NULL;
+                }
+                X509_free(cert);
+            }
+        }
     }
 #endif
 
@@ -822,11 +854,10 @@ int redis_global_init(void) {
         return -1;
 
     if (!g_uri.is_unix && !g_uri.use_tls && g_uri.host != NULL) {
-        logmsg(LOG_WARNING,
-               "redis: using unencrypted TCP (redis://). "
-               "Credentials, private keys and certificate data will be "
-               "transmitted in plaintext. Prefer rediss:// or a Unix-domain "
-               "socket when possible.");
+        logmsg(LOG_ERR,
+               "redis: plaintext TCP (redis://) is not permitted; "
+               "use rediss:// with peer verification or a Unix-domain socket");
+        goto init_failed;
     }
 
 #ifdef WITH_REDIS_SSL
@@ -944,6 +975,50 @@ void redis_global_cleanup(void) {
 #endif
 }
 
+/*
+ * Query the server-reported length of a hash field with HSTRLEN before we
+ * request the actual value.  This prevents a compromised or misconfigured
+ * Redis from causing the application (and hiredis) to allocate an oversized
+ * reply (CWE-770).
+ */
+static int redis_check_field_size(redisContext* c, const char* key,
+                                  const char* field, size_t max_size,
+                                  size_t* out_len) {
+    redisReply* r;
+    long long   len;
+
+    r = redisCommand(c, "HSTRLEN %s %s", key, field);
+    if (r == NULL || c->err) {
+        logmsg(LOG_ERR, "redis: HSTRLEN %s %s failed: %s",
+               key, field, c->err ? c->errstr : "no reply");
+        if (r != NULL)
+            freeReplyObject(r);
+        return -1;
+    }
+
+    if (r->type != REDIS_REPLY_INTEGER) {
+        logmsg(LOG_ERR, "redis: unexpected HSTRLEN reply type %d", r->type);
+        freeReplyObject(r);
+        return -1;
+    }
+
+    len = r->integer;
+    freeReplyObject(r);
+
+    if (len < 0) {
+        logmsg(LOG_ERR, "redis: HSTRLEN %s %s returned negative length", key, field);
+        return -1;
+    }
+
+    if ((size_t) len > max_size) {
+        logmsg(LOG_ERR, "redis: %s %s too large (%lld > %zu)", key, field, len, max_size);
+        return -1;
+    }
+
+    *out_len = (size_t) len;
+    return 0;
+}
+
 int redis_lookup_cert(const char* raw_address,
                       char** pem, size_t* pem_len,
                       char** chain, size_t* chain_len) {
@@ -983,6 +1058,16 @@ int redis_lookup_cert(const char* raw_address,
         c = redis_get_ctx();
         if (c == NULL)
             return -1;
+
+        {
+            size_t pem_size, chain_size;
+            if (redis_check_field_size(c, key, "pem", MAX_REDIS_PEM_SIZE, &pem_size) != 0)
+                return -1;
+            if (redis_check_field_size(c, key, "chain", MAX_REDIS_CHAIN_SIZE, &chain_size) != 0)
+                return -1;
+            (void) pem_size;
+            (void) chain_size;
+        }
 
         r = redisCommand(c, "HMGET %s pem chain", key);
         if (r == NULL || c->err) {
@@ -1028,9 +1113,11 @@ int redis_lookup_cert(const char* raw_address,
             }
             memcpy(pem_tmp, r->element[0]->str, r->element[0]->len);
             pem_tmp[r->element[0]->len] = '\0';
+            *pem = pem_tmp;
+            *pem_len = (size_t) r->element[0]->len;
         }
 
-        if (pem_tmp != NULL &&
+        if (*pem != NULL &&
             r->element[1]->type == REDIS_REPLY_STRING && r->element[1]->len > 0) {
             if ((size_t) r->element[1]->len > MAX_REDIS_CHAIN_SIZE) {
                 logmsg(LOG_ERR, "redis: chain value too large for %s", raw_address);
@@ -1047,19 +1134,15 @@ int redis_lookup_cert(const char* raw_address,
             }
             memcpy(chain_tmp, r->element[1]->str, r->element[1]->len);
             chain_tmp[r->element[1]->len] = '\0';
+            *chain = chain_tmp;
+            *chain_len = (size_t) r->element[1]->len;
         }
 
         freeReplyObject(r);
 
-        if (pem_tmp == NULL) {
-            free(chain_tmp);
+        if (*pem == NULL)
             return 1;
-        }
 
-        *pem = pem_tmp;
-        *pem_len = strlen(pem_tmp);
-        *chain = chain_tmp;
-        *chain_len = chain_tmp ? strlen(chain_tmp) : 0;
         return 0;
     }
 #endif
