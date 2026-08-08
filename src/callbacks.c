@@ -32,12 +32,28 @@ static int headerchain_would_exceed(const CTXDATA* ctxdata,
         return 1;
 
     /* break_after_semicolon expands only when the value is long enough. */
-    if (num_semicolon > 0 && hv_len >= 70)
+    if (num_semicolon > 0 && hv_len >= 70) {
+        if (num_semicolon > SIZE_MAX / (size_t)PHASE_PRE_SIGN)
+            return 1;
         add = num_semicolon * (size_t)PHASE_PRE_SIGN;
+    }
 
-    /* node + field + value + terminator + expansion */
-    need = sizeof(NODE) + hf_len + (hv_len + 1) + add;
-    if (need < hf_len || need < add)
+    /* node + field + value + terminator + expansion, checking overflow. */
+    need = sizeof(NODE);
+    if (add > SIZE_MAX - need)
+        return 1;
+    need += add;
+
+    if (hf_len > SIZE_MAX - need)
+        return 1;
+    need += hf_len;
+
+    if ((hv_len + 1) > SIZE_MAX - need)
+        return 1;
+    need += hv_len + 1;
+
+    /* A single header must not exceed the total per-message budget. */
+    if (need > MAX_HEADER_CHAIN_BYTES)
         return 1;
 
     if (ctxdata->headerchain_bytes > MAX_HEADER_CHAIN_BYTES - need)

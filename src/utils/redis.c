@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <openssl/crypto.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -26,13 +27,18 @@ static int redis_tls_initialized = 0;
 #include <sys/time.h>
 
 /*
- * Hard limits on how much data hiredis may buffer or allocate for a single
- * bulk reply.  The 8 MiB input cap is the real security boundary: it bounds
- * what hiredis can feed into its parser before the application-level size
- * checks run.  The 4 MiB bulk cap, array cap, and buffer-trim cap provide
- * defence-in-depth (CWE-770 / CWE-789).
+ * Hard limits on how much data a Redis connection may consume for a single
+ * command reply.  These are a defence-in-depth against a malicious or
+ * compromised Redis server trying to exhaust local memory (CWE-770 / CWE-789).
+ *
+ * The 8 MiB per-reply wire cap is the primary security boundary: it bounds the
+ * total bytes the parser may pull from the network for one synchronous command,
+ * even if hiredis compacts its input buffer while retaining completed child
+ * objects.  The 4 MiB bulk cap, array nesting, and per-command reply shape
+ * checks (only the exact replies we expect) provide further depth.
  */
 #define REDIS_MAX_INPUT_LEN      (8 * 1024 * 1024)
+#define REDIS_MAX_REPLY_BYTES    (8 * 1024 * 1024)
 #define REDIS_MAX_BULK_LEN       (4 * 1024 * 1024)
 #define REDIS_READER_MAX_ARRAY   1024
 #define REDIS_READER_MAX_BUF_SIZE (64 * 1024)
@@ -48,6 +54,9 @@ typedef struct {
     redisReplyObjectFunctions   guarded_reader_fns; /* copy with wrapped createString */
     size_t                      max_input;
     size_t                      max_bulk;
+    size_t                      max_reply_bytes;  /* per-command wire budget */
+    size_t                      reply_bytes;      /* bytes consumed for this command */
+    long long                   expected_root_elements; /* -1 = no array allowed, >=0 exact */
 } redis_conn_extra;
 
 #ifdef WITH_REDIS_SSL
@@ -654,6 +663,9 @@ static int redis_reply_is_ok(redisReply* r) {
 
 static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap);
 static void* redis_guarded_create_string(const redisReadTask* task, char* str, size_t len);
+static void* redis_guarded_create_array(const redisReadTask* task, size_t elements);
+static void* redis_guarded_create_integer(const redisReadTask* task, long long value);
+static void* redis_guarded_create_nil(const redisReadTask* task);
 
 static redis_conn_extra* redis_conn_extra_new(const redisContextFuncs* orig,
                                               redisReplyObjectFunctions* reader_fns) {
@@ -668,9 +680,15 @@ static redis_conn_extra* redis_conn_extra_new(const redisContextFuncs* orig,
     e->orig_reader_fns = reader_fns;
     e->guarded_reader_fns = *reader_fns;
     e->guarded_reader_fns.createString = redis_guarded_create_string;
+    e->guarded_reader_fns.createArray = redis_guarded_create_array;
+    e->guarded_reader_fns.createInteger = redis_guarded_create_integer;
+    e->guarded_reader_fns.createNil = redis_guarded_create_nil;
 
     e->max_input = REDIS_MAX_INPUT_LEN;
     e->max_bulk = REDIS_MAX_BULK_LEN;
+    e->max_reply_bytes = REDIS_MAX_REPLY_BYTES;
+    e->reply_bytes = 0;
+    e->expected_root_elements = 0;
     return e;
 }
 
@@ -714,8 +732,22 @@ static void redisFreeGuarded(redisContext* c) {
         free(e);
 }
 
+static int redis_guarded_is_root_or_child_of_root(const redisReadTask* task) {
+    if (task == NULL)
+        return 0;
+    /* Simple root reply (no parent). */
+    if (task->parent == NULL)
+        return 1;
+    /* Child of the root reply (one level deep). */
+    if (task->parent->parent == NULL)
+        return 1;
+    return 0;
+}
+
 static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap) {
     redis_conn_extra* e = c->privdata;
+    size_t            to_read;
+    ssize_t           n;
 
     if (e == NULL)
         return -1;
@@ -728,7 +760,26 @@ static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap) {
         return -1;
     }
 
-    return e->orig->read(c, buf, bufcap);
+    /* 8 MiB per-command wire cap: bounds total bytes a malicious reply may
+     * consume even if hiredis compacts its input buffer while retaining child
+     * objects.
+     */
+    if (e->reply_bytes >= e->max_reply_bytes) {
+        c->err = REDIS_ERR_OTHER;
+        snprintf(c->errstr, sizeof(c->errstr),
+                 "redis: per-command reply size limit exceeded");
+        return -1;
+    }
+
+    to_read = bufcap;
+    if (to_read > e->max_reply_bytes - e->reply_bytes)
+        to_read = e->max_reply_bytes - e->reply_bytes;
+
+    n = e->orig->read(c, buf, to_read);
+    if (n > 0)
+        e->reply_bytes += (size_t) n;
+
+    return n;
 }
 
 static void* redis_guarded_create_string(const redisReadTask* task, char* str, size_t len) {
@@ -737,12 +788,124 @@ static void* redis_guarded_create_string(const redisReadTask* task, char* str, s
     if (e == NULL)
         return NULL;
 
+    if (!redis_guarded_is_root_or_child_of_root(task)) {
+        logmsg(LOG_ERR, "redis: unexpected string at non-root reply depth");
+        return NULL;
+    }
+
     if (len > e->max_bulk) {
         logmsg(LOG_ERR, "redis: bulk string reply exceeds maximum allowed size (%zu > %zu)",
                len, e->max_bulk);
         return NULL;
     }
     return e->orig_reader_fns->createString(task, str, len);
+}
+
+static void* redis_guarded_create_array(const redisReadTask* task, size_t elements) {
+    redis_conn_extra* e = task->privdata;
+
+    if (e == NULL)
+        return NULL;
+
+    /* We only ever expect a single root array; reject nested arrays and any
+     * root array whose size does not match the current command's expectation.
+     */
+    if (task->parent != NULL ||
+        (e->expected_root_elements >= 0 &&
+         (long long) elements != e->expected_root_elements)) {
+        logmsg(LOG_ERR, "redis: unexpected aggregate reply (nested or wrong size)");
+        return NULL;
+    }
+
+    return e->orig_reader_fns->createArray(task, elements);
+}
+
+static void* redis_guarded_create_integer(const redisReadTask* task, long long value) {
+    redis_conn_extra* e = task->privdata;
+
+    (void) value;
+
+    if (e == NULL)
+        return NULL;
+
+    /* Integers are only expected as simple root replies (SISMEMBER, HSTRLEN). */
+    if (task->parent != NULL) {
+        logmsg(LOG_ERR, "redis: unexpected integer inside aggregate reply");
+        return NULL;
+    }
+
+    return e->orig_reader_fns->createInteger(task, value);
+}
+
+static void* redis_guarded_create_nil(const redisReadTask* task) {
+    redis_conn_extra* e = task->privdata;
+
+    if (e == NULL)
+        return NULL;
+
+    if (!redis_guarded_is_root_or_child_of_root(task)) {
+        logmsg(LOG_ERR, "redis: unexpected nil at non-root reply depth");
+        return NULL;
+    }
+
+    return e->orig_reader_fns->createNil(task);
+}
+
+/*
+ * Issue a synchronous Redis command with a per-command resource and shape
+ * budget.  expected_root_elements is the exact number of root array elements
+ * expected for this command (e.g. 2 for HMGET "pem chain"); 0 means no root
+ * array is expected (status/integer replies only).
+ */
+static redisReply* redis_guarded_command(redisContext* c, long long expected_root_elements, const char* format, ...) {
+    redis_conn_extra* e;
+    redisReply*       r;
+    va_list           ap;
+
+    e = c->privdata;
+    if (e != NULL) {
+        e->reply_bytes = 0;
+        e->expected_root_elements = expected_root_elements;
+    }
+
+    va_start(ap, format);
+    r = redisvCommand(c, format, ap);
+    va_end(ap);
+
+    if (r == NULL) {
+        if (!c->err)
+            c->err = REDIS_ERR_OTHER;
+        if (c->errstr[0] == '\0')
+            snprintf(c->errstr, sizeof(c->errstr), "redis: command failed");
+        return NULL;
+    }
+
+    /* Accept legitimate error replies so callers can log/distinguish them. */
+    if (r->type == REDIS_REPLY_ERROR)
+        return r;
+
+    if (expected_root_elements > 0) {
+        if (r->type != REDIS_REPLY_ARRAY ||
+            (long long) r->elements != expected_root_elements) {
+            logmsg(LOG_ERR, "redis: unexpected aggregate reply (expected %lld elements, got type %d)",
+                   expected_root_elements, r->type);
+            freeReplyObject(r);
+            c->err = REDIS_ERR_OTHER;
+            snprintf(c->errstr, sizeof(c->errstr), "redis: unexpected aggregate reply");
+            return NULL;
+        }
+    } else {
+        if (r->type != REDIS_REPLY_INTEGER &&
+            r->type != REDIS_REPLY_STATUS) {
+            logmsg(LOG_ERR, "redis: unexpected reply type %d", r->type);
+            freeReplyObject(r);
+            c->err = REDIS_ERR_OTHER;
+            snprintf(c->errstr, sizeof(c->errstr), "redis: unexpected reply type");
+            return NULL;
+        }
+    }
+
+    return r;
 }
 
 static int redis_install_guards(redisContext* c) {
@@ -902,9 +1065,9 @@ static redisContext* redis_do_connect(void) {
     if (g_uri.password != NULL) {
         redisReply* r;
         if (g_uri.username != NULL) {
-            r = redisCommand(c, "AUTH %s %s", g_uri.username, g_uri.password);
+            r = redis_guarded_command(c, 0, "AUTH %s %s", g_uri.username, g_uri.password);
         } else {
-            r = redisCommand(c, "AUTH %s", g_uri.password);
+            r = redis_guarded_command(c, 0, "AUTH %s", g_uri.password);
         }
         if (!redis_reply_is_ok(r)) {
             if (r != NULL && r->type == REDIS_REPLY_ERROR)
@@ -920,7 +1083,7 @@ static redisContext* redis_do_connect(void) {
     }
 
     if (g_uri.db != 0) {
-        redisReply* r = redisCommand(c, "SELECT %d", g_uri.db);
+        redisReply* r = redis_guarded_command(c, 0, "SELECT %d", g_uri.db);
         if (!redis_reply_is_ok(r)) {
             if (r != NULL && r->type == REDIS_REPLY_ERROR)
                 logmsg(LOG_ERR, "redis: SELECT %d rejected: %s", g_uri.db, r->str);
@@ -1176,7 +1339,7 @@ static int redis_check_field_size(redisContext* c, const char* key,
     redisReply* r;
     long long   len;
 
-    r = redisCommand(c, "HSTRLEN %s %s", key, field);
+    r = redis_guarded_command(c, 0, "HSTRLEN %s %s", key, field);
     if (r == NULL || c->err) {
         logmsg(LOG_ERR, "redis: HSTRLEN %s %s failed: %s",
                key, field, c->err ? c->errstr : "no reply");
@@ -1258,7 +1421,7 @@ int redis_lookup_cert(const char* raw_address,
             (void) chain_size;
         }
 
-        r = redisCommand(c, "HMGET %s pem chain", key);
+        r = redis_guarded_command(c, 2, "HMGET %s pem chain", key);
         if (r == NULL || c->err) {
             logmsg(LOG_ERR, "redis: HMGET failed: %s",
                    c->err ? c->errstr : "no reply");
@@ -1272,7 +1435,7 @@ int redis_lookup_cert(const char* raw_address,
                 return -1;
             if (redis_tls_set_ctx(c) != 0)
                 return -1;
-            r = redisCommand(c, "HMGET %s pem chain", key);
+            r = redis_guarded_command(c, 2, "HMGET %s pem chain", key);
             if (r == NULL || c->err) {
                 logmsg(LOG_ERR, "redis: HMGET failed after reconnect: %s",
                        c->err ? c->errstr : "no reply");
@@ -1372,7 +1535,7 @@ int redis_auth_signing_lookup(const char* auth_identity, const char* signer_iden
         if (c == NULL)
             return -1;
 
-        r = redisCommand(c, "SISMEMBER %s %s", key, signer_identity);
+        r = redis_guarded_command(c, 0, "SISMEMBER %s %s", key, signer_identity);
         if (r == NULL || c->err) {
             logmsg(LOG_ERR, "redis: SISMEMBER failed: %s",
                    c->err ? c->errstr : "no reply");
@@ -1386,7 +1549,7 @@ int redis_auth_signing_lookup(const char* auth_identity, const char* signer_iden
                 return -1;
             if (redis_tls_set_ctx(c) != 0)
                 return -1;
-            r = redisCommand(c, "SISMEMBER %s %s", key, signer_identity);
+            r = redis_guarded_command(c, 0, "SISMEMBER %s %s", key, signer_identity);
             if (r == NULL || c->err) {
                 logmsg(LOG_ERR, "redis: SISMEMBER failed after reconnect: %s",
                        c->err ? c->errstr : "no reply");

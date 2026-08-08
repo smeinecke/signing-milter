@@ -99,17 +99,16 @@ To enable the Redis certificate backend, add `-r`, optionally `-P` and `-W`, to
 `/etc/default/signing-milter`:
 
 ```ini
-OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfix -r redis://127.0.0.1:6379/0 -P signing-milter: -W /etc/signing-milter/passphrase"
+OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfix -r rediss://127.0.0.1:6380/0?verify=peer -P signing-milter: -W /etc/signing-milter/passphrase"
 ```
 
 Redis TLS (`rediss://`) is supported when built with `WITH_REDIS_SSL=ON`.
 It uses TLS 1.2 or newer and never falls back to older protocol versions.
-`verify=peer` (the default) validates the server certificate chain and
-hostname/IP.  `verify=none` encrypts the connection without authenticating the
-server identity.  The expected identity defaults to the URI host; use
-`verify_name=hostname` to override it.  Use `sni=hostname` to set the TLS SNI
-extension without changing the verified identity.  TLS query parameters are
-rejected for plaintext `redis://`.  IPv6 hosts must be bracketed:
+`verify=peer` (the default and only supported mode) validates the server
+certificate chain and hostname/IP.  The expected identity defaults to the URI
+host; use `verify_name=hostname` to override it.  Use `sni=hostname` to set the
+TLS SNI extension without changing the verified identity.  Plaintext TCP
+(`redis://`) and `verify=none` are rejected.  IPv6 hosts must be bracketed:
 `rediss://[::1]:6380/0`.  The `cert=` file may include the leaf client
 certificate plus any required intermediates.
 
@@ -117,12 +116,11 @@ The passphrase file is used for encrypted private keys loaded from Redis. When
 Redis is enabled, the milter queries Redis first; on a miss it falls back to the
 local CDB `signingtable`.
 
-## Optional auth-signing-table
+## Auth-signing-table
 
-By default, `signing-milter` signs any message for which a matching signing
-key can be found.  Starting with this version, an optional
-`auth-signing-table` may be used to restrict which signing identities an
-authenticated SMTP/SASL user is allowed to use.
+To allow an authenticated SMTP/SASL user to sign, an `auth-signing-table` must
+be configured.  Without `-a` (local CDB) or `-R` (Redis) no authenticated
+principal is authorized to use any signing identity.
 
 The authenticated identity is read from the libmilter macro `{auth_authen}`.
 This macro contains the SASL login name, which is treated as an **opaque
@@ -173,7 +171,7 @@ redis-cli SADD signing-milter:auth:case@example.org     sender@example.com sales
 Enable it with `-R` together with the Redis URI and optional prefix:
 
 ```ini
-OPTIONS="... -R -r redis://127.0.0.1:6379/0 -P signing-milter:"
+OPTIONS="... -R -r rediss://127.0.0.1:6380/0?verify=peer -P signing-milter:"
 ```
 
 ### Postfix configuration for authenticated submission

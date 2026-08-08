@@ -43,7 +43,7 @@ does not exist.
 .SH OPTIONS
 .TP
 .B \-a authsigningtable
-Enable the optional local CDB auth-signing table.
+Enable the local CDB auth-signing table.
 .I authsigningtable
 is a
 .I cdb
@@ -57,6 +57,12 @@ identities.
 Email addresses in the value are normalized (lower case, angle brackets removed)
 before comparison; the authenticated identity is treated as an opaque string and
 is not normalized.
+Authenticated signing is only permitted when either
+.B \-a
+or
+.B \-R
+is configured; without an auth-signing-table an authenticated principal is not
+authorized to use any signing identity.
 When the auth-signing-table is configured, a message is only signed if the
 authenticated identity is authorized for the signing identity selected from the
 envelope sender or the
@@ -215,10 +221,12 @@ queries Redis for a certificate before falling back to the CDB signingtable.
 The
 .I uri
 has one of the following forms:
-.IR redis://host:port/db ,
 .IR rediss://host:port/db ,
 or
 .IR unix:///path/to/redis.sock .
+Plaintext TCP
+.IR redis://
+is rejected; network connections to Redis must be TLS.
 Passwords must not appear in the URI; use
 .B \-p
 or
@@ -232,9 +240,8 @@ certificate is validated against the system or configured CA store, the
 certificate chain is checked, and the URI host is verified against the server's
 certificate.
 .IR verify=peer
-performs full chain and hostname/IP verification (this is the default).
-.IR verify=none
-encrypts the connection without authenticating the server identity.
+performs full chain and hostname/IP verification (this is the default and only
+supported mode); TLS connections without peer verification are rejected.
 .IR verify_name=hostname
 overrides the identity that is verified; the default is the URI host.
 .IR sni=hostname
@@ -252,7 +259,7 @@ The
 .IR cert
 file may contain the leaf client certificate followed by any intermediate
 certificates required to build a trust chain.
-TLS parameters are rejected for plaintext
+TLS parameters are rejected for
 .IR redis:// .
 IPv6 hosts must be bracketed:
 .IR rediss://[::1]:6380/0 .

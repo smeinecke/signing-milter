@@ -5,8 +5,10 @@
 void usage(void) {
     printf("\nUsage: %s [OPTIONS]\n", STR_PROGNAME);
     printf("Options are:\n");
-    printf("  -a authtable    optional CDB table that maps an authenticated SMTP\n");
-    printf("                  identity to the signing identities it is allowed to use\n");
+    printf("  -a authtable    CDB table that maps an authenticated SMTP identity\n");
+    printf("                  to the signing identities it is allowed to use.\n");
+    printf("                  Required for authenticated-sender signing; without\n");
+    printf("                  -a or -R no authenticated principal may sign.\n");
     printf("                  default: none\n");
     printf("  -h              show help and exit\n");
     printf("  -v              show version and exit\n");
@@ -32,9 +34,9 @@ void usage(void) {
     printf("  -P prefix       Redis key prefix for certificate and auth-signing lookup\n");
     printf("                  default: %s\n", opt_redis_prefix);
     printf("  -r uri          Redis URI for dynamic certificate lookup\n");
-    printf("                  - redis://host:port/db\n");
-    printf("                  - rediss://host:port/db?verify=peer\n");
-    printf("                    (TLS 1.2+; verify={none,peer}; default peer)\n");
+    printf("                  - rediss://host:port/db?verify=peer (TLS 1.2+)\n");
+    printf("                    peer verification is mandatory; verify=peer is the\n");
+    printf("                    default and only supported mode\n");
     printf("                    passwords must not appear in the URI; use -p or -C\n");
     printf("                    verify_name= sets the expected server identity\n");
     printf("                    sni= sets only the TLS SNI extension\n");
@@ -42,6 +44,7 @@ void usage(void) {
     printf("                    cert= may include the leaf plus intermediate chain\n");
     printf("                    IPv6 hosts must be bracketed: rediss://[::1]:6380/0\n");
     printf("                  - unix:///path/to/redis.sock\n");
+    printf("                    plaintext TCP (redis://) and verify=none are rejected\n");
     printf("                  default: none\n");
     printf("  -p file         file containing the Redis password; the password must\n");
     printf("                  not appear in the URI or command line\n");

@@ -134,6 +134,7 @@ static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t 
     close(fd);
     if (n < 0) {
         logmsg(LOG_ERR, "cannot read Redis password file %s: %s", path, strerror(errno));
+        OPENSSL_cleanse(buf, (size_t) st.st_size + 1);
         free(buf);
         return NULL;
     }
@@ -141,12 +142,14 @@ static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t 
 
     if (n != st.st_size) {
         logmsg(LOG_ERR, "Redis password file %s changed size while reading", path);
+        OPENSSL_cleanse(buf, (size_t) n);
         free(buf);
         return NULL;
     }
 
     if (memchr(buf, '\0', (size_t) n) != NULL) {
         logmsg(LOG_ERR, "Redis password file %s contains embedded NUL bytes", path);
+        OPENSSL_cleanse(buf, (size_t) n);
         free(buf);
         return NULL;
     }
@@ -159,6 +162,7 @@ static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t 
 
     if (len == 0) {
         logmsg(LOG_ERR, "Redis password file %s is empty", path);
+        OPENSSL_cleanse(buf, (size_t) n);
         free(buf);
         return NULL;
     }
@@ -244,6 +248,7 @@ static int read_redis_credentials_file(const char* path, uid_t milter_uid, gid_t
     close(fd);
     if (n < 0) {
         logmsg(LOG_ERR, "cannot read Redis credentials file %s: %s", path, strerror(errno));
+        OPENSSL_cleanse(buf, (size_t) st.st_size);
         free(buf);
         return -1;
     }
@@ -251,6 +256,14 @@ static int read_redis_credentials_file(const char* path, uid_t milter_uid, gid_t
 
     if (n != st.st_size) {
         logmsg(LOG_ERR, "Redis credentials file %s changed size while reading", path);
+        OPENSSL_cleanse(buf, (size_t) n);
+        free(buf);
+        return -1;
+    }
+
+    if (memchr(buf, '\0', (size_t) n) != NULL) {
+        logmsg(LOG_ERR, "Redis credentials file %s contains embedded NUL bytes", path);
+        OPENSSL_cleanse(buf, (size_t) n);
         free(buf);
         return -1;
     }
@@ -262,14 +275,6 @@ static int read_redis_credentials_file(const char* path, uid_t milter_uid, gid_t
             ++line;
         if (*line == '\0' || *line == '#')
             continue;
-        if (memchr(line, '\0', strlen(line)) != NULL) {
-            logmsg(LOG_ERR, "Redis credentials file %s contains embedded NUL bytes", path);
-            for (i = 0; i < count; i++)
-                free(parts[i]);
-            OPENSSL_cleanse(buf, (size_t) n);
-            free(buf);
-            return -1;
-        }
         parts[count] = strdup(line);
         if (parts[count] == NULL) {
             logmsg(LOG_ERR, "strdup(credentials) failed: %s", strerror(errno));
@@ -657,6 +662,19 @@ int main(int argc, char** argv) {
             free(socket_path_copy);
             exit(EX_DATAERR);
         }
+        /*
+         * If the startup process is privileged, the socket directory must be
+         * owned by root.  A directory owned by the unprivileged daemon UID
+         * would let a prior (compromised) daemon instance race the root-time
+         * fstatat/fchownat/fchmodat sequence.
+         */
+        if (getuid() == 0 && dir_st.st_uid != 0) {
+            logmsg(LOG_ERR, "socket directory %s must be owned by root when milter starts as root", socket_dir);
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+
         if (dir_st.st_uid != 0 && dir_st.st_uid != uid) {
             logmsg(LOG_ERR, "socket directory %s must be owned by root or the milter user", socket_dir);
             close(socket_dirfd);
@@ -673,6 +691,18 @@ int main(int argc, char** argv) {
             !(dir_st.st_gid == gid ||
               (opt_clientgroup != NULL && dir_st.st_gid == client_gid))) {
             logmsg(LOG_ERR, "socket directory %s must not be group-writable by an untrusted group", socket_dir);
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+
+        /*
+         * For a privileged startup the directory must not be group-writable by
+         * a non-root group either; otherwise a process in that group can
+         * rename the socket between smfi_opensocket() and fchownat().
+         */
+        if (getuid() == 0 && (dir_st.st_mode & S_IWGRP) && dir_st.st_gid != 0) {
+            logmsg(LOG_ERR, "socket directory %s must not be group-writable by a non-root group when milter starts as root", socket_dir);
             close(socket_dirfd);
             free(socket_path_copy);
             exit(EX_DATAERR);
