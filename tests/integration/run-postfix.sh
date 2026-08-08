@@ -64,6 +64,13 @@ chmod 0755 "$WORK_DIR"
 "$SCRIPT_DIR/data/gen-test-cert.sh" "$WORK_DIR"
 chown -R "$MILTER_USER:$MILTER_USER" "$WORK_DIR"
 
+# signing-milter now requires an auth-signing table.  The XCLIENT LOGIN below
+# tells Postfix to report the authenticated identity "testuser".
+AUTHSIGNINGTABLE_TXT="$WORK_DIR/authsigningtable"
+AUTHSIGNINGTABLE_CDB="$WORK_DIR/authsigningtable.cdb"
+printf 'testuser\tsender@example.com\n' > "$AUTHSIGNINGTABLE_TXT"
+cdb -c -m "$AUTHSIGNINGTABLE_CDB" "$AUTHSIGNINGTABLE_TXT"
+
 # Verify the generated certificate is actually usable as a CA.
 if [ ! -f "$WORK_DIR/test-ca.pem" ]; then
     echo "ERROR: test CA not generated"
@@ -88,6 +95,7 @@ postconf -e "smtpd_milters = $POSTFIX_MILTER_SOCKET"
 postconf -e "milter_default_action = accept"
 postconf -e "maillog_file = /var/log/mail.log"
 postconf -e "smtpd_delay_reject = no"
+postconf -e "smtpd_authorized_xclient_hosts = 127.0.0.0/8"
 
 # Fix Postfix permissions in case the install did not set them up.
 postfix set-permissions 2>/dev/null || true
@@ -98,7 +106,8 @@ postfix set-permissions 2>/dev/null || true
 log "starting signing-milter on $MILTER_SOCKET ..."
 stdbuf -oL -eL "$BUILD_DIR/signing-milter" \
     -u "$MILTER_USER" -g "$MILTER_USER" \
-    -s "$MILTER_SOCKET" -m "$WORK_DIR/signingtable.cdb" -l -d 7 \
+    -s "$MILTER_SOCKET" -m "$WORK_DIR/signingtable.cdb" \
+    -a "$AUTHSIGNINGTABLE_CDB" -l -d 7 \
     > "$WORK_DIR/milter.log" 2>&1 &
 MILTER_PID=$!
 
@@ -139,6 +148,7 @@ fi
 # Send a test message from the address present in the signing table.
 log "sending test message ..."
 swaks --to test@localhost --from sender@example.com --server 127.0.0.1 --port 25 \
+    --xclient-addr 127.0.0.1 --xclient-name localhost --xclient-login testuser \
     --body "$SCRIPT_DIR/data/message-plain.txt" \
     --h-Subject "signing-milter Postfix integration test"
 
