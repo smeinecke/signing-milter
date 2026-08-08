@@ -244,8 +244,8 @@ class RedisTlsTest:
         if milter_work is None:
             milter_work = tempfile.mkdtemp(dir=self.work)
         sock = os.path.join(milter_work, "miltertest.sock")
-        log = os.path.join(self.work, "milter.log")
-        user = os.environ.get("USER", os.environ.get("LOGNAME", "calvin"))
+        log = os.path.join(milter_work, "milter.log")
+        user = run(["id", "-un"], check=True).stdout.strip()
         group = run(["id", "-gn"], check=True).stdout.strip()
         p = subprocess.Popen(
             [MILTER_BIN, "-u", user, "-g", group, "-c", ":relax",
@@ -253,8 +253,20 @@ class RedisTlsTest:
             stdout=open(log, "w"), stderr=subprocess.STDOUT,
         )
         self.milter_procs.append(p)
-        if not wait_for_socket(sock, timeout=15.0):
-            raise RuntimeError("signing-milter did not create socket")
+        if not wait_for_socket(sock, timeout=20.0):
+            try:
+                p.wait(timeout=2)
+                rc = p.returncode
+            except Exception:
+                rc = "still running"
+            logtxt = ""
+            if os.path.exists(log):
+                try:
+                    with open(log) as f:
+                        logtxt = f.read()
+                except Exception:
+                    pass
+            raise RuntimeError(f"signing-milter did not create socket (rc={rc})\nlog:\n{logtxt}")
         return sock, p
 
     def mailfrom_reply(self, sock_path, sender="<sender@example.com>", timeout=10.0):
