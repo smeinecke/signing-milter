@@ -42,12 +42,12 @@ static int redis_tls_initialized = 0;
  * function tables; we never mutate hiredis' shared tables, only the copies.
  */
 typedef struct {
-    redisContextFuncs         orig;             /* original context funcs */
-    redisContextFuncs         guarded;          /* copy with wrapped read */
-    redisReplyObjectFunctions orig_reader_fns;  /* original reader funcs */
-    redisReplyObjectFunctions guarded_reader_fns; /* copy with wrapped createString */
-    size_t                    max_input;
-    size_t                    max_bulk;
+    const redisContextFuncs*    orig;             /* original context funcs */
+    redisContextFuncs           guarded;          /* copy with wrapped read */
+    redisReplyObjectFunctions*  orig_reader_fns;  /* original reader funcs */
+    redisReplyObjectFunctions   guarded_reader_fns; /* copy with wrapped createString */
+    size_t                      max_input;
+    size_t                      max_bulk;
 } redis_conn_extra;
 
 #ifdef WITH_REDIS_SSL
@@ -123,10 +123,12 @@ static void redis_uri_free(void) {
 #endif
 }
 
+static void redisFreeGuarded(redisContext* c);
+
 static void redis_free_ctx(void* p) {
     if (p != NULL) {
         redisContext* c = (redisContext*) p;
-        redisFree(c);
+        redisFreeGuarded(c);
     }
 }
 
@@ -654,17 +656,17 @@ static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap);
 static void* redis_guarded_create_string(const redisReadTask* task, char* str, size_t len);
 
 static redis_conn_extra* redis_conn_extra_new(const redisContextFuncs* orig,
-                                              const redisReplyObjectFunctions* reader_fns) {
+                                              redisReplyObjectFunctions* reader_fns) {
     redis_conn_extra* e = calloc(1, sizeof(*e));
     if (e == NULL)
         return NULL;
 
-    e->orig = *orig;
-    e->guarded = e->orig;
+    e->orig = orig;
+    e->guarded = *orig;
     e->guarded.read = redis_guarded_read;
 
-    e->orig_reader_fns = *reader_fns;
-    e->guarded_reader_fns = e->orig_reader_fns;
+    e->orig_reader_fns = reader_fns;
+    e->guarded_reader_fns = *reader_fns;
     e->guarded_reader_fns.createString = redis_guarded_create_string;
 
     e->max_input = REDIS_MAX_INPUT_LEN;
@@ -672,11 +674,44 @@ static redis_conn_extra* redis_conn_extra_new(const redisContextFuncs* orig,
     return e;
 }
 
-static void redis_conn_extra_free(void* p) {
-    redis_conn_extra* e = p;
+/*
+ * Restore the hiredis-owned function tables and detach the guard state before
+ * redisFree() is called.  This ensures hiredis does not dereference any guard
+ * memory (e.g. e->guarded) during the redisFree() teardown sequence.
+ */
+static void redis_conn_extra_detach(redisContext* c) {
+    redis_conn_extra* e = c->privdata;
+
     if (e == NULL)
         return;
-    free(e);
+
+    c->funcs = e->orig;
+    if (c->reader != NULL) {
+        c->reader->fn = e->orig_reader_fns;
+        c->reader->privdata = NULL;
+    }
+    c->privdata = NULL;
+    c->free_privdata = NULL;
+}
+
+/*
+ * Free a guarded redisContext.  This restores the original hiredis function
+ * tables first, then lets hiredis tear down the context, and finally releases
+ * the per-context guard state.  This avoids a UAF where redisFree() would
+ * call c->funcs->free_privctx() through a pointer that lives inside the guard
+ * state being freed.
+ */
+static void redisFreeGuarded(redisContext* c) {
+    redis_conn_extra* e = NULL;
+
+    if (c != NULL) {
+        e = c->privdata;
+        if (e != NULL)
+            redis_conn_extra_detach(c);
+        redisFree(c);
+    }
+    if (e != NULL)
+        free(e);
 }
 
 static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap) {
@@ -693,7 +728,7 @@ static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap) {
         return -1;
     }
 
-    return e->orig.read(c, buf, bufcap);
+    return e->orig->read(c, buf, bufcap);
 }
 
 static void* redis_guarded_create_string(const redisReadTask* task, char* str, size_t len) {
@@ -707,7 +742,7 @@ static void* redis_guarded_create_string(const redisReadTask* task, char* str, s
                len, e->max_bulk);
         return NULL;
     }
-    return e->orig_reader_fns.createString(task, str, len);
+    return e->orig_reader_fns->createString(task, str, len);
 }
 
 static int redis_install_guards(redisContext* c) {
@@ -723,7 +758,8 @@ static int redis_install_guards(redisContext* c) {
     }
 
     c->privdata = e;
-    c->free_privdata = redis_conn_extra_free;
+    /* Do not set free_privdata: guard teardown is handled by redisFreeGuarded. */
+    c->free_privdata = NULL;
     c->funcs = &e->guarded;
     c->reader->fn = &e->guarded_reader_fns;
     c->reader->privdata = e;
@@ -746,7 +782,7 @@ static redisContext* redis_do_connect(void) {
     if (c == NULL || c->err) {
         if (c != NULL) {
             logmsg(LOG_ERR, "redis: connection failed: %s", c->errstr);
-            redisFree(c);
+            redisFreeGuarded(c);
         } else {
             logmsg(LOG_ERR, "redis: connection failed: unknown error");
         }
@@ -755,7 +791,7 @@ static redisContext* redis_do_connect(void) {
 
     if (redisSetTimeout(c, tv) != REDIS_OK) {
         logmsg(LOG_ERR, "redis: redisSetTimeout() failed");
-        redisFree(c);
+        redisFreeGuarded(c);
         return NULL;
     }
 
@@ -767,14 +803,14 @@ static redisContext* redis_do_connect(void) {
 
         if (g_ssl_ctx == NULL) {
             logmsg(LOG_ERR, "redis: TLS context not initialized");
-            redisFree(c);
+            redisFreeGuarded(c);
             return NULL;
         }
 
         ssl = SSL_new(g_ssl_ctx);
         if (ssl == NULL) {
             logmsg(LOG_ERR, "redis: SSL_new() failed");
-            redisFree(c);
+            redisFreeGuarded(c);
             return NULL;
         }
 
@@ -786,14 +822,14 @@ static redisContext* redis_do_connect(void) {
                 if (X509_VERIFY_PARAM_set1_ip_asc(SSL_get0_param(ssl), verify_name) != 1) {
                     logmsg(LOG_ERR, "redis: X509_VERIFY_PARAM_set1_ip_asc(%s) failed", verify_name);
                     SSL_free(ssl);
-                    redisFree(c);
+                    redisFreeGuarded(c);
                     return NULL;
                 }
             } else {
                 if (X509_VERIFY_PARAM_set1_host(SSL_get0_param(ssl), verify_name, 0) != 1) {
                     logmsg(LOG_ERR, "redis: X509_VERIFY_PARAM_set1_host(%s) failed", verify_name);
                     SSL_free(ssl);
-                    redisFree(c);
+                    redisFreeGuarded(c);
                     return NULL;
                 }
             }
@@ -810,7 +846,7 @@ static redisContext* redis_do_connect(void) {
             if (SSL_set_tlsext_host_name(ssl, sni) != 1) {
                 logmsg(LOG_ERR, "redis: SSL_set_tlsext_host_name(%s) failed", sni);
                 SSL_free(ssl);
-                redisFree(c);
+                redisFreeGuarded(c);
                 return NULL;
             }
         }
@@ -819,7 +855,7 @@ static redisContext* redis_do_connect(void) {
             logmsg(LOG_ERR, "redis: TLS handshake failed: %s",
                    c->err ? c->errstr : "unknown");
             SSL_free(ssl);
-            redisFree(c);
+            redisFreeGuarded(c);
             return NULL;
         }
 
@@ -833,7 +869,7 @@ static redisContext* redis_do_connect(void) {
                 logmsg(LOG_ERR, "redis: TLS peer verification failed: %s",
                        X509_verify_cert_error_string(verify_result));
                 SSL_free(ssl);
-                redisFree(c);
+                redisFreeGuarded(c);
                 return NULL;
             }
 
@@ -842,14 +878,14 @@ static redisContext* redis_do_connect(void) {
                 if (cert == NULL) {
                     logmsg(LOG_ERR, "redis: no peer certificate presented");
                     SSL_free(ssl);
-                    redisFree(c);
+                    redisFreeGuarded(c);
                     return NULL;
                 }
                 if (X509_check_host(cert, verify_name, strlen(verify_name), 0, NULL) != 1) {
                     logmsg(LOG_ERR, "redis: TLS certificate does not match hostname '%s'", verify_name);
                     X509_free(cert);
                     SSL_free(ssl);
-                    redisFree(c);
+                    redisFreeGuarded(c);
                     return NULL;
                 }
                 X509_free(cert);
@@ -859,7 +895,7 @@ static redisContext* redis_do_connect(void) {
 #endif
 
     if (redis_install_guards(c) != 0) {
-        redisFree(c);
+        redisFreeGuarded(c);
         return NULL;
     }
 
@@ -877,7 +913,7 @@ static redisContext* redis_do_connect(void) {
                 logmsg(LOG_ERR, "redis: AUTH failed");
             if (r != NULL)
                 freeReplyObject(r);
-            redisFree(c);
+            redisFreeGuarded(c);
             return NULL;
         }
         freeReplyObject(r);
@@ -892,7 +928,7 @@ static redisContext* redis_do_connect(void) {
                 logmsg(LOG_ERR, "redis: SELECT %d failed", g_uri.db);
             if (r != NULL)
                 freeReplyObject(r);
-            redisFree(c);
+            redisFreeGuarded(c);
             return NULL;
         }
         freeReplyObject(r);
@@ -914,7 +950,7 @@ static redisContext* redis_get_ctx(void) {
          * redis_do_connect() fails below.
          */
         (void) pthread_setspecific(redis_tls, NULL);
-        redisFree(c);
+        redisFreeGuarded(c);
     }
 
     c = redis_do_connect();
@@ -925,7 +961,7 @@ static redisContext* redis_get_ctx(void) {
         int rc = pthread_setspecific(redis_tls, c);
         if (rc != 0) {
             logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(rc));
-            redisFree(c);
+            redisFreeGuarded(c);
             return NULL;
         }
     }
@@ -945,7 +981,7 @@ static void redis_tls_clear_ctx(redisContext* c) {
         (void) pthread_setspecific(redis_tls, NULL);
 
     if (c != NULL)
-        redisFree(c);
+        redisFreeGuarded(c);
 }
 
 /*
@@ -956,7 +992,7 @@ static int redis_tls_set_ctx(redisContext* c) {
     int rc = pthread_setspecific(redis_tls, c);
     if (rc != 0) {
         logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(rc));
-        redisFree(c);
+        redisFreeGuarded(c);
         return -1;
     }
     return 0;

@@ -322,7 +322,10 @@ class RedisTlsTest:
         failures = []
         skips = []
         try:
-            self._run_scenarios(skips)
+            try:
+                self._run_scenarios(skips)
+            except Exception as e:
+                failures.append(str(e))
             try:
                 self._test_stalled_tls()
             except Exception as e:
