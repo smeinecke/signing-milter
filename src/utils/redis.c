@@ -1,6 +1,7 @@
 #include "redis.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,6 +94,26 @@ static void redis_free_ctx(void* p) {
         redisContext* c = (redisContext*) p;
         redisFree(c);
     }
+}
+
+/*
+ * Parse a non-negative decimal integer from a complete, NUL-terminated string.
+ * The whole string must be consumed; no trailing garbage is allowed.
+ */
+static int redis_parse_number(const char* s, long min, long max, long* out) {
+    char* end;
+    long  v;
+
+    if (s == NULL || *s == '\0')
+        return -1;
+
+    errno = 0;
+    v = strtol(s, &end, 10);
+    if (errno != 0 || end == s || *end != '\0' || v < min || v > max)
+        return -1;
+
+    *out = v;
+    return 0;
 }
 
 #ifdef WITH_REDIS_SSL
@@ -330,9 +351,21 @@ static int redis_parse_uri(const char* uri) {
 
         g_uri.db = 0;
         if (qm != NULL) {
-            if (sscanf(qm + 1, "db=%d", &g_uri.db) == 1) {
-                if (g_uri.db < 0)
-                    g_uri.db = 0;
+            if (strncmp(qm + 1, "db=", 3) != 0) {
+                logmsg(LOG_ERR, "redis: unknown query parameter in Unix socket URI (URI redacted)");
+                free(work);
+                redis_uri_free();
+                return -1;
+            }
+            {
+                long db;
+                if (redis_parse_number(qm + 4, 0, INT_MAX, &db) != 0) {
+                    logmsg(LOG_ERR, "redis: invalid db query in Unix socket URI (URI redacted)");
+                    free(work);
+                    redis_uri_free();
+                    return -1;
+                }
+                g_uri.db = (int) db;
             }
         }
 
@@ -454,8 +487,17 @@ static int redis_parse_uri(const char* uri) {
     slash = strrchr(g_uri.host, '/');
     if (slash != NULL) {
         *slash = '\0';
-        if (sscanf(slash + 1, "%d", &g_uri.db) != 1 || g_uri.db < 0)
-            g_uri.db = 0;
+        if (*(slash + 1) != '\0') {
+            long db;
+            if (redis_parse_number(slash + 1, 0, INT_MAX, &db) != 0) {
+                logmsg(LOG_ERR, "redis: invalid database in URI (URI redacted)");
+                free(query);
+                free(work);
+                redis_uri_free();
+                return -1;
+            }
+            g_uri.db = (int) db;
+        }
     }
 
     /*
@@ -474,14 +516,15 @@ static int redis_parse_uri(const char* uri) {
         }
         *end = '\0';
         if (*(end + 1) == ':') {
-            if (sscanf(end + 2, "%d", &g_uri.port) != 1 ||
-                g_uri.port <= 0 || g_uri.port > 65535) {
+            long port;
+            if (redis_parse_number(end + 2, 1, 65535, &port) != 0) {
                 logmsg(LOG_ERR, "redis: invalid port in IPv6 URI (URI redacted)");
                 free(query);
                 free(work);
                 redis_uri_free();
                 return -1;
             }
+            g_uri.port = (int) port;
         } else if (*(end + 1) != '\0') {
             logmsg(LOG_ERR, "redis: malformed IPv6 URI (URI redacted)");
             free(query);
@@ -498,14 +541,15 @@ static int redis_parse_uri(const char* uri) {
         colon = strrchr(g_uri.host, ':');
         if (colon != NULL) {
             *colon = '\0';
-            if (sscanf(colon + 1, "%d", &g_uri.port) != 1 ||
-                g_uri.port <= 0 || g_uri.port > 65535) {
+            long port;
+            if (redis_parse_number(colon + 1, 1, 65535, &port) != 0) {
                 logmsg(LOG_ERR, "redis: invalid port in URI (URI redacted)");
                 free(query);
                 free(work);
                 redis_uri_free();
                 return -1;
             }
+            g_uri.port = (int) port;
         }
     }
 
@@ -559,6 +603,13 @@ static int redis_parse_uri(const char* uri) {
 
     free(work);
     return 0;
+}
+
+static int redis_reply_is_ok(redisReply* r) {
+    return r != NULL &&
+           r->type == REDIS_REPLY_STATUS &&
+           r->str != NULL &&
+           strcmp(r->str, "OK") == 0;
 }
 
 static redisContext* redis_do_connect(void) {
@@ -660,9 +711,11 @@ static redisContext* redis_do_connect(void) {
         } else {
             r = redisCommand(c, "AUTH %s", g_uri.password);
         }
-        if (r == NULL || c->err) {
-            logmsg(LOG_ERR, "redis: AUTH failed: %s",
-                   c->err ? c->errstr : "no reply");
+        if (!redis_reply_is_ok(r)) {
+            if (r != NULL && r->type == REDIS_REPLY_ERROR)
+                logmsg(LOG_ERR, "redis: AUTH rejected: %s", r->str);
+            else
+                logmsg(LOG_ERR, "redis: AUTH failed");
             if (r != NULL)
                 freeReplyObject(r);
             redisFree(c);
@@ -673,9 +726,11 @@ static redisContext* redis_do_connect(void) {
 
     if (g_uri.db != 0) {
         redisReply* r = redisCommand(c, "SELECT %d", g_uri.db);
-        if (r == NULL || c->err) {
-            logmsg(LOG_ERR, "redis: SELECT %d failed: %s",
-                   g_uri.db, c->err ? c->errstr : "no reply");
+        if (!redis_reply_is_ok(r)) {
+            if (r != NULL && r->type == REDIS_REPLY_ERROR)
+                logmsg(LOG_ERR, "redis: SELECT %d rejected: %s", g_uri.db, r->str);
+            else
+                logmsg(LOG_ERR, "redis: SELECT %d failed", g_uri.db);
             if (r != NULL)
                 freeReplyObject(r);
             redisFree(c);
@@ -707,10 +762,13 @@ static redisContext* redis_get_ctx(void) {
     if (c == NULL)
         return NULL;
 
-    if (pthread_setspecific(redis_tls, c) != 0) {
-        logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(errno));
-        redisFree(c);
-        return NULL;
+    {
+        int rc = pthread_setspecific(redis_tls, c);
+        if (rc != 0) {
+            logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(rc));
+            redisFree(c);
+            return NULL;
+        }
     }
 
     return c;
@@ -736,8 +794,9 @@ static void redis_tls_clear_ctx(redisContext* c) {
  * context is freed and the slot remains clear.
  */
 static int redis_tls_set_ctx(redisContext* c) {
-    if (pthread_setspecific(redis_tls, c) != 0) {
-        logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(errno));
+    int rc = pthread_setspecific(redis_tls, c);
+    if (rc != 0) {
+        logmsg(LOG_ERR, "redis: pthread_setspecific() failed: %s", strerror(rc));
         redisFree(c);
         return -1;
     }
@@ -839,7 +898,7 @@ int redis_global_init(void) {
 
     rc = pthread_key_create(&redis_tls, redis_free_ctx);
     if (rc != 0) {
-        logmsg(LOG_ERR, "redis: pthread_key_create() failed: %s", strerror(errno));
+        logmsg(LOG_ERR, "redis: pthread_key_create() failed: %s", strerror(rc));
         goto init_failed;
     }
     redis_tls_initialized = 1;

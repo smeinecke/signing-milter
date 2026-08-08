@@ -66,6 +66,47 @@ static void test_invalid_port_rejected(void** state) {
     opt_redis_uri = "rediss://127.0.0.1:99999/0?verify=none";
     assert_int_equal(redis_global_init(), -1);
     redis_global_cleanup();
+
+    opt_redis_uri = "rediss://127.0.0.1:0/0?verify=none";
+    assert_int_equal(redis_global_init(), -1);
+    redis_global_cleanup();
+
+    opt_redis_uri = "rediss://127.0.0.1:6380garbage/0?verify=none";
+    assert_int_equal(redis_global_init(), -1);
+    redis_global_cleanup();
+}
+
+static void test_invalid_db_rejected(void** state) {
+    (void) state;
+    opt_redis_uri = "rediss://127.0.0.1:6380/1garbage?verify=none";
+    assert_int_equal(redis_global_init(), -1);
+    redis_global_cleanup();
+
+    opt_redis_uri = "rediss://127.0.0.1:6380/-1?verify=none";
+    assert_int_equal(redis_global_init(), -1);
+    redis_global_cleanup();
+
+    opt_redis_uri = "unix:///tmp/redis.sock?db=foo";
+    assert_int_equal(redis_global_init(), -1);
+    redis_global_cleanup();
+}
+
+static void test_valid_db_and_trailing_slash(void** state) {
+    (void) state;
+
+    opt_redis_uri = "redis://[::1]:6379/";
+    assert_int_equal(redis_global_init(), 0);
+    redis_global_cleanup();
+
+#ifdef WITH_REDIS_SSL
+    opt_redis_uri = "rediss://127.0.0.1:6380/?verify=none";
+    assert_int_equal(redis_global_init(), 0);
+    redis_global_cleanup();
+#endif
+
+    opt_redis_uri = "unix:///tmp/redis.sock?db=2";
+    assert_int_equal(redis_global_init(), 0);
+    redis_global_cleanup();
 }
 
 static void test_cert_key_mismatch_rejected(void** state) {
@@ -107,6 +148,8 @@ int main(void) {
         cmocka_unit_test(test_plaintext_tls_params_rejected),
         cmocka_unit_test(test_malformed_ipv6_rejected),
         cmocka_unit_test(test_invalid_port_rejected),
+        cmocka_unit_test(test_invalid_db_rejected),
+        cmocka_unit_test(test_valid_db_and_trailing_slash),
         cmocka_unit_test(test_cert_key_mismatch_rejected),
 #ifdef WITH_REDIS_SSL
         cmocka_unit_test(test_tls_ipv6_uri_verify_none),

@@ -14,7 +14,8 @@ if [ ! -x "$BUILD_DIR/signing-milter" ]; then
     exit 1
 fi
 
-if grep -q '^WITH_REDIS_SSL:BOOL=OFF' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+if grep -q '^WITH_REDIS_SSL:BOOL=OFF' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null || \
+   ! grep -q '^HIREDIS_SSL_FOUND:INTERNAL=1' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
     echo "SKIP: signing-milter was built without WITH_REDIS_SSL"
     exit 0
 fi

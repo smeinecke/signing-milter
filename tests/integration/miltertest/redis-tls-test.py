@@ -188,7 +188,7 @@ class RedisTlsTest:
              self.selfsigned_cert, "-days", "1", "-subj", "/CN=localhost", "-nodes"], check=True)
 
     def start_redis(self, port, cert, key, ca=None, auth_clients="no", bind=None, protocols=None,
-                    connect_host="127.0.0.1"):
+                    connect_host="127.0.0.1", requirepass=None, databases=None):
         """Start redis-server with TLS on the given port."""
         conf = os.path.join(self.work, f"redis-{port}.conf")
         with open(conf, "w") as f:
@@ -203,6 +203,10 @@ class RedisTlsTest:
                 f.write(f"bind {bind}\n")
             if protocols:
                 f.write(f"tls-protocols {protocols}\n")
+            if requirepass:
+                f.write(f"requirepass {requirepass}\n")
+            if databases:
+                f.write(f"databases {databases}\n")
             f.write(f"pidfile {self.work}/redis-{port}.pid\n")
             f.write(f"logfile {self.work}/redis-{port}.log\n")
             f.write("daemonize yes\n")
@@ -227,7 +231,8 @@ class RedisTlsTest:
             raise RuntimeError(f"redis-server did not start on {connect_host}:{port}")
         return p
 
-    def redis_cli(self, port, *args, host="127.0.0.1", ca=None, cert=None, key=None, insecure=False):
+    def redis_cli(self, port, *args, host="127.0.0.1", ca=None, cert=None, key=None, insecure=False,
+                  password=None):
         cmd = ["redis-cli", "--tls", "-h", host, "-p", str(port)]
         if ca:
             cmd += ["--cacert", ca]
@@ -237,6 +242,8 @@ class RedisTlsTest:
             cmd += ["--key", key]
         if insecure:
             cmd += ["--insecure"]
+        if password:
+            cmd += ["--pass", password]
         cmd += list(args)
         return run(cmd)
 
@@ -397,6 +404,25 @@ class RedisTlsTest:
         long_sender = "<" + "a" * 1100 + "@example.com>"
         r = self.mailfrom_reply(sock, sender=long_sender)
         self.assert_reply("oversized MAIL FROM", constants.SMFIR_TEMPFAIL, r)
+
+        # Scenario 9: wrong Redis password -> AUTH rejected, signing fails
+        port4 = 16386
+        self.start_redis(port4, self.server_cert, self.server_key, ca=self.ca_cert,
+                         requirepass="secret")
+        self.redis_cli(port4, "HMSET", "signing-milter:sender@example.com", "pem", signing_pem, "chain", "",
+                       ca=self.ca_cert, password="secret").check_returncode()
+        sock, _ = self.start_milter(
+            f"rediss://:wrong@localhost:{port4}/0?verify=peer&cacert={self.ca_cert}")
+        r = self.mailfrom_reply(sock)
+        self.assert_reply("wrong Redis password", constants.SMFIR_TEMPFAIL, r)
+
+        # Scenario 10: SELECT to non-existent DB -> connection/signing fails
+        port5 = 16387
+        self.start_redis(port5, self.server_cert, self.server_key, ca=self.ca_cert, databases=1)
+        sock, _ = self.start_milter(
+            f"rediss://localhost:{port5}/1?verify=peer&cacert={self.ca_cert}")
+        r = self.mailfrom_reply(sock)
+        self.assert_reply("SELECT to non-existent DB", constants.SMFIR_TEMPFAIL, r)
 
     def _test_ipv6(self, skips):
         cert_dir = os.path.join(self.work, "signing-cert-v6")
