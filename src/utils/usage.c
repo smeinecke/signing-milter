@@ -32,9 +32,10 @@ void usage(void) {
     printf("  -P prefix       Redis key prefix for certificate and auth-signing lookup\n");
     printf("                  default: %s\n", opt_redis_prefix);
     printf("  -r uri          Redis URI for dynamic certificate lookup\n");
-    printf("                  - redis://[password@]host:port/db\n");
-    printf("                  - rediss://[password@]host:port/db?verify=peer\n");
+    printf("                  - redis://host:port/db\n");
+    printf("                  - rediss://host:port/db?verify=peer\n");
     printf("                    (TLS 1.2+; verify={none,peer}; default peer)\n");
+    printf("                    passwords must not appear in the URI; use -p or -C\n");
     printf("                    verify_name= sets the expected server identity\n");
     printf("                    sni= sets only the TLS SNI extension\n");
     printf("                    cacert=/capath=/cert=/key= for CA and mTLS\n");

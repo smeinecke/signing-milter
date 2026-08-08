@@ -187,6 +187,13 @@ When using the Redis certificate backend (\-r) or the Redis auth-signing table
 to every Redis key. The default is
 .IR signing-milter: .
 .TP
+.B \-p file
+Read the Redis password from
+.IR file . The file must be a regular file owned by
+root or the milter user, must not be a symbolic link, and must not be readable
+or writable by group or other. A trailing newline is stripped. The password must
+not appear in the Redis URI or on the command line.
+.TP
 .B \-R
 Enable the optional Redis auth-signing table.  When enabled, the authenticated
 identity is looked up in Redis using
@@ -208,11 +215,15 @@ queries Redis for a certificate before falling back to the CDB signingtable.
 The
 .I uri
 has one of the following forms:
-.IR redis://[password@]host:port/db ,
-.IR redis://[username:password@]host:port/db ,
-.IR rediss://[username:password@]host:port/db ,
+.IR redis://host:port/db ,
+.IR rediss://host:port/db ,
 or
 .IR unix:///path/to/redis.sock .
+Passwords must not appear in the URI; use
+.B \-p
+or
+.B \-C
+instead.
 .PP
 For
 .IR rediss:// ,
@@ -246,6 +257,15 @@ TLS parameters are rejected for plaintext
 IPv6 hosts must be bracketed:
 .IR rediss://[::1]:6380/0 .
 Unknown or duplicate TLS parameters are rejected at startup.
+.TP
+.B \-C file
+Read Redis username and password from
+.IR file .
+The file must contain up to two non-empty lines: the first line is the username
+and the second line is the password. If only one line is present, it is treated
+as the password. The same ownership and permission requirements as for
+.B \-p
+apply. The credentials must not appear in the Redis URI or on the command line.
 .TP
 .B \-W file
 Read the static passphrase for encrypted private keys from
