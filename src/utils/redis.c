@@ -27,31 +27,28 @@ static int redis_tls_initialized = 0;
 
 /*
  * Hard limits on how much data hiredis may buffer or allocate for a single
- * bulk reply.  These bounds are enforced by the wrapped I/O and reply object
- * functions installed on every Redis context, so a compromised or misconfigured
- * server cannot force unbounded allocation before the application-level size
- * checks run (CWE-770 / CWE-789).
+ * bulk reply.  The 8 MiB input cap is the real security boundary: it bounds
+ * what hiredis can feed into its parser before the application-level size
+ * checks run.  The 4 MiB bulk cap, array cap, and buffer-trim cap provide
+ * defence-in-depth (CWE-770 / CWE-789).
  */
 #define REDIS_MAX_INPUT_LEN      (8 * 1024 * 1024)
 #define REDIS_MAX_BULK_LEN       (4 * 1024 * 1024)
 #define REDIS_READER_MAX_ARRAY   1024
 #define REDIS_READER_MAX_BUF_SIZE (64 * 1024)
 
+/*
+ * Per-context wrapper state.  Each redisContext gets its own copies of the
+ * function tables; we never mutate hiredis' shared tables, only the copies.
+ */
 typedef struct {
-    redisContextFuncs orig;
-    size_t            max_input;
+    redisContextFuncs         orig;             /* original context funcs */
+    redisContextFuncs         guarded;          /* copy with wrapped read */
+    redisReplyObjectFunctions orig_reader_fns;  /* original reader funcs */
+    redisReplyObjectFunctions guarded_reader_fns; /* copy with wrapped createString */
+    size_t                    max_input;
+    size_t                    max_bulk;
 } redis_conn_extra;
-
-static redisContextFuncs         redis_guarded_funcs;
-static redisContextFuncs         redis_guarded_ssl_funcs;
-static redisReplyObjectFunctions redis_guarded_reply_fns;
-static redisReplyObjectFunctions redis_original_reply_fns;
-static size_t                    redis_max_bulk_len = REDIS_MAX_BULK_LEN;
-static pthread_mutex_t           redis_guarded_lock = PTHREAD_MUTEX_INITIALIZER;
-static int                       redis_guarded_inited = 0;
-#ifdef WITH_REDIS_SSL
-static int                       redis_guarded_ssl_inited = 0;
-#endif
 
 #ifdef WITH_REDIS_SSL
 #include <arpa/inet.h>
@@ -649,21 +646,37 @@ static int redis_reply_is_ok(redisReply* r) {
 
 /*
  * Connection-specific wrapper functions that enforce resource limits before
- * hiredis allocates unbounded amounts of memory.
+ * hiredis allocates unbounded amounts of memory.  Each redisContext owns a
+ * private copy of its function tables; we never mutate hiredis' shared tables.
  */
 
-static redis_conn_extra* redis_conn_extra_new(const redisContextFuncs* orig) {
+static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap);
+static void* redis_guarded_create_string(const redisReadTask* task, char* str, size_t len);
+
+static redis_conn_extra* redis_conn_extra_new(const redisContextFuncs* orig,
+                                              const redisReplyObjectFunctions* reader_fns) {
     redis_conn_extra* e = calloc(1, sizeof(*e));
     if (e == NULL)
         return NULL;
+
     e->orig = *orig;
+    e->guarded = e->orig;
+    e->guarded.read = redis_guarded_read;
+
+    e->orig_reader_fns = *reader_fns;
+    e->guarded_reader_fns = e->orig_reader_fns;
+    e->guarded_reader_fns.createString = redis_guarded_create_string;
+
     e->max_input = REDIS_MAX_INPUT_LEN;
+    e->max_bulk = REDIS_MAX_BULK_LEN;
     return e;
 }
 
 static void redis_conn_extra_free(void* p) {
-    if (p != NULL)
-        free(p);
+    redis_conn_extra* e = p;
+    if (e == NULL)
+        return;
+    free(e);
 }
 
 static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap) {
@@ -672,6 +685,7 @@ static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap) {
     if (e == NULL)
         return -1;
 
+    /* 8 MiB hard cap on how much data can be fed into the parser. */
     if (c->reader != NULL && c->reader->len >= e->max_input) {
         c->err = REDIS_ERR_OTHER;
         snprintf(c->errstr, sizeof(c->errstr),
@@ -683,50 +697,26 @@ static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap) {
 }
 
 static void* redis_guarded_create_string(const redisReadTask* task, char* str, size_t len) {
-    if (len > redis_max_bulk_len) {
+    redis_conn_extra* e = task->privdata;
+
+    if (e == NULL)
+        return NULL;
+
+    if (len > e->max_bulk) {
         logmsg(LOG_ERR, "redis: bulk string reply exceeds maximum allowed size (%zu > %zu)",
-               len, redis_max_bulk_len);
+               len, e->max_bulk);
         return NULL;
     }
-    return redis_original_reply_fns.createString(task, str, len);
+    return e->orig_reader_fns.createString(task, str, len);
 }
 
 static int redis_install_guards(redisContext* c) {
     redis_conn_extra* e;
-    const redisContextFuncs* orig = c->funcs;
-    int use_ssl = 0;
-
-#ifdef WITH_REDIS_SSL
-    use_ssl = c->privctx != NULL || g_uri.use_tls;
-#endif
 
     if (c->privdata != NULL)
         return 0;
 
-    pthread_mutex_lock(&redis_guarded_lock);
-
-    if (!redis_guarded_inited) {
-        redis_guarded_funcs = *orig;
-        redis_guarded_funcs.read = redis_guarded_read;
-
-        redis_original_reply_fns = *c->reader->fn;
-        redis_guarded_reply_fns = redis_original_reply_fns;
-        redis_guarded_reply_fns.createString = redis_guarded_create_string;
-
-        redis_guarded_inited = 1;
-    }
-
-#ifdef WITH_REDIS_SSL
-    if (use_ssl && !redis_guarded_ssl_inited) {
-        redis_guarded_ssl_funcs = *orig;
-        redis_guarded_ssl_funcs.read = redis_guarded_read;
-        redis_guarded_ssl_inited = 1;
-    }
-#endif
-
-    pthread_mutex_unlock(&redis_guarded_lock);
-
-    e = redis_conn_extra_new(orig);
+    e = redis_conn_extra_new(c->funcs, c->reader->fn);
     if (e == NULL) {
         logmsg(LOG_ERR, "redis: cannot allocate connection guards");
         return -1;
@@ -734,16 +724,9 @@ static int redis_install_guards(redisContext* c) {
 
     c->privdata = e;
     c->free_privdata = redis_conn_extra_free;
-
-#ifdef WITH_REDIS_SSL
-    if (use_ssl)
-        c->funcs = &redis_guarded_ssl_funcs;
-    else
-#endif
-        c->funcs = &redis_guarded_funcs;
-
-    c->reader->fn = &redis_guarded_reply_fns;
-    c->reader->privdata = &redis_max_bulk_len;
+    c->funcs = &e->guarded;
+    c->reader->fn = &e->guarded_reader_fns;
+    c->reader->privdata = e;
     c->reader->maxelements = REDIS_READER_MAX_ARRAY;
     c->reader->maxbuf = REDIS_READER_MAX_BUF_SIZE;
 
