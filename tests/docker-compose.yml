@@ -1,6 +1,9 @@
 services:
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--unixsocket", "/data/redis.sock", "--port", "0", "--unixsocketperm", "777"]
+    volumes:
+      - redis-data:/data
 
   tests:
     build:
@@ -12,4 +15,9 @@ services:
     command: ["/src/tests/integration/run-redis-test.sh", "/src/build"]
     user: root
     environment:
-      - REDIS_HOST=redis
+      - REDIS_URI=unix:/data/redis.sock
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

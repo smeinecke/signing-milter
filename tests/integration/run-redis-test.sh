@@ -35,6 +35,24 @@ POSTFIX_STARTED=""
 REDIS_PID=""
 REDIS_URI="${REDIS_URI:-}"
 REDIS_HOST="${REDIS_HOST:-}"
+REDIS_SOCKET=""
+
+# Helper for redis-cli calls depending on the URI type.
+redis_cli() {
+    case "$REDIS_URI" in
+        unix:*)
+            _sock="${REDIS_URI#unix:}"
+            _sock="${_sock#//}"
+            redis-cli -s "$_sock" "$@"
+            ;;
+        rediss://*)
+            redis-cli -u "$REDIS_URI" --tls "$@"
+            ;;
+        *)
+            redis-cli -u "$REDIS_URI" "$@"
+            ;;
+    esac
+}
 
 log() {
     echo "[run-redis-test] $*"
@@ -81,6 +99,13 @@ chmod 0755 "$WORK_DIR"
 "$SCRIPT_DIR/data/gen-test-cert.sh" "$WORK_DIR"
 chown -R "$MILTER_USER:$MILTER_USER" "$WORK_DIR"
 
+# signing-milter now requires an auth-signing table.  The XCLIENT LOGIN below
+# tells Postfix to report the authenticated identity "testuser".
+AUTHSIGNINGTABLE_TXT="$WORK_DIR/authsigningtable"
+AUTHSIGNINGTABLE_CDB="$WORK_DIR/authsigningtable.cdb"
+printf 'testuser\tsender@example.com\n' > "$AUTHSIGNINGTABLE_TXT"
+cdb -c -m "$AUTHSIGNINGTABLE_CDB" "$AUTHSIGNINGTABLE_TXT"
+
 # Verify the generated certificate is actually usable as a CA.
 if [ ! -f "$WORK_DIR/test-ca.pem" ]; then
     echo "ERROR: test CA not generated"
@@ -94,38 +119,41 @@ elif [ -n "$REDIS_HOST" ]; then
     REDIS_URI="redis://$REDIS_HOST:6379/0"
 else
     log "starting local redis-server ..."
+    REDIS_SOCKET="$WORK_DIR/redis.sock"
     redis-server --daemonize no \
-        --port 6379 \
+        --unixsocket "$REDIS_SOCKET" \
+        --unixsocketperm 777 \
+        --port 0 \
         --dir "$WORK_DIR" \
         --logfile "$WORK_DIR/redis.log" \
         --pidfile "$WORK_DIR/redis.pid" &
     REDIS_PID=$!
-    REDIS_URI="redis://127.0.0.1:6379/0"
+    REDIS_URI="unix:$REDIS_SOCKET"
 fi
 
 for i in $(seq 1 30); do
-    if redis-cli -u "$REDIS_URI" -n 0 PING 2>/dev/null | grep -q PONG; then
+    if redis_cli -n 0 PING 2>/dev/null | grep -q PONG; then
         log "redis at $REDIS_URI is ready"
         break
     fi
     sleep 0.2
 done
-if ! redis-cli -u "$REDIS_URI" -n 0 PING 2>/dev/null | grep -q PONG; then
+if ! redis_cli -n 0 PING 2>/dev/null | grep -q PONG; then
     echo "ERROR: redis at $REDIS_URI is not reachable"
     exit 1
 fi
 
 # Make sure the test database is empty in case the Redis instance is reused.
-redis-cli -u "$REDIS_URI" -n 0 FLUSHDB
+redis_cli -n 0 FLUSHDB
 
 # Seed Redis with the generated certificate.
 log "seeding Redis with test certificate (URI: $REDIS_URI) ..."
-redis-cli -u "$REDIS_URI" -n 0 HMSET "signing-milter:sender@example.com" \
+redis_cli -n 0 HMSET "signing-milter:sender@example.com" \
     pem "$(cat "$WORK_DIR/test-cert+key.pem")" \
     chain "$(cat "$WORK_DIR/test-ca.pem")"
 
 # Optional: a second sender with the same key and no chain.
-redis-cli -u "$REDIS_URI" -n 0 HMSET "signing-milter:other@example.com" \
+redis_cli -n 0 HMSET "signing-milter:other@example.com" \
     pem "$(cat "$WORK_DIR/test-cert+key.pem")"
 
 # Prepare the test user's Maildir. Postfix will deliver there.
@@ -149,6 +177,7 @@ postconf -e "smtpd_milters = $POSTFIX_MILTER_SOCKET"
 postconf -e "milter_default_action = accept"
 postconf -e "maillog_file = /var/log/mail.log"
 postconf -e "smtpd_delay_reject = no"
+postconf -e "smtpd_authorized_xclient_hosts = 127.0.0.0/8"
 
 # Fix Postfix permissions in case the install did not set them up.
 postfix set-permissions 2>/dev/null || true
@@ -158,7 +187,8 @@ postfix set-permissions 2>/dev/null || true
 log "starting signing-milter on $MILTER_SOCKET with Redis ..."
 stdbuf -oL -eL "$BUILD_DIR/signing-milter" \
     -u "$MILTER_USER" -g "$MILTER_USER" \
-    -s "$MILTER_SOCKET" -r "$REDIS_URI" -P "signing-milter:" -l -d 7 \
+    -s "$MILTER_SOCKET" -r "$REDIS_URI" -P "signing-milter:" \
+    -a "$AUTHSIGNINGTABLE_CDB" -l -d 7 \
     > "$WORK_DIR/milter.log" 2>&1 &
 MILTER_PID=$!
 
@@ -199,6 +229,7 @@ fi
 # Send a test message from the address present in Redis.
 log "sending test message ..."
 swaks --to test@localhost --from sender@example.com --server 127.0.0.1 --port 25 \
+    --xclient-addr 127.0.0.1 --xclient-name localhost --xclient-login testuser \
     --body "$SCRIPT_DIR/data/message-plain.txt" \
     --h-Subject "signing-milter Redis integration test"
 
