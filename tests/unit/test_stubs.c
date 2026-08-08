@@ -18,6 +18,8 @@ int opt_logdest  = LOG_DEST_STDOUT;
 const char* opt_redis_uri = NULL;
 const char* opt_redis_prefix = "signing-milter:";
 const char* opt_redis_passphrase = NULL;
+char*       opt_redis_username = NULL;
+char*       opt_redis_password = NULL;
 
 /* Global dictionaries referenced by dict_cdb.c. */
 struct DICT dict_signingtable = {

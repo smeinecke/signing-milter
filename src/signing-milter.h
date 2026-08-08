@@ -134,8 +134,14 @@ extern const char* opt_modetable;
 extern char*       opt_miltersocket;
 extern int         opt_timeout;
 extern const char* opt_user;
-extern int   opt_addxheader;
-extern int   opt_signerfromheader;
+extern int         opt_addxheader;
+extern int         opt_signerfromheader;
+extern int         opt_allow_inet;
+
+extern const char* opt_redis_password_file;
+extern const char* opt_redis_credentials_file;
+extern char*       opt_redis_password;
+extern char*       opt_redis_username;
 
 extern const char* opt_redis_uri;
 extern const char* opt_redis_prefix;

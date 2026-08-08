@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "main.h"
+#include <openssl/crypto.h>
 #include "utils/auth_signing.h"
 
 /* set default values */
@@ -14,8 +15,9 @@ const char* opt_group        = "signing-milter";
 const char* opt_keepdir      = NULL;
 const char* opt_signingtable = "/etc/signing-milter/signingtable.cdb";
 const char* opt_modetable    = NULL;
-static char opt_miltersocket_default[] = "inet6:30053@[::1]";
+static char opt_miltersocket_default[] = "unix:/run/signing-milter/signing-milter.sock";
 char*       opt_miltersocket = opt_miltersocket_default;
+int         opt_allow_inet = 0;
 int         opt_timeout      = 600;
 const char* opt_user         = "signing-milter";
 int         opt_addxheader   = 0;
@@ -24,6 +26,10 @@ int         opt_signerfromheader = 0;
 const char* opt_redis_uri = NULL;
 const char* opt_redis_prefix = "signing-milter:";
 const char* opt_redis_passphrase = NULL;
+const char* opt_redis_password_file = NULL;
+const char* opt_redis_credentials_file = NULL;
+char*       opt_redis_password = NULL;
+char*       opt_redis_username = NULL;
 static int  opt_signingtable_explicit = 0;
 
 /* writable strings for libmilter calls */
@@ -55,6 +61,250 @@ struct DICT dict_modetable = {
 /* statistics signal watcher thread */
 static pthread_t stats_thread;
 
+#define MAX_REDIS_SECRET_SIZE 4096
+
+/*
+ * Read a single secret from a file.  The file must not be a symlink, must be
+ * readable by the milter process, and must not be overly permissive.  The
+ * returned string is NUL terminated and has any trailing newline removed; the
+ * caller is responsible for clearing and freeing it.
+ */
+static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t milter_gid) {
+    int         fd;
+    struct stat st;
+    char*       buf = NULL;
+    ssize_t     n;
+    size_t      len;
+
+    fd = open(path, O_RDONLY | O_NOFOLLOW);
+    if (fd < 0) {
+        logmsg(LOG_ERR, "cannot open Redis password file %s: %s", path, strerror(errno));
+        return NULL;
+    }
+
+    if (fstat(fd, &st) < 0) {
+        logmsg(LOG_ERR, "cannot stat Redis password file %s: %s", path, strerror(errno));
+        close(fd);
+        return NULL;
+    }
+    if (!S_ISREG(st.st_mode)) {
+        logmsg(LOG_ERR, "Redis password file %s is not a regular file", path);
+        close(fd);
+        return NULL;
+    }
+    if (st.st_uid != 0 && st.st_uid != milter_uid) {
+        logmsg(LOG_ERR, "Redis password file %s must be owned by root or the milter user", path);
+        close(fd);
+        return NULL;
+    }
+    if (st.st_mode & S_IWOTH) {
+        logmsg(LOG_ERR, "Redis password file %s must not be world-writable", path);
+        close(fd);
+        return NULL;
+    }
+    if (st.st_mode & S_IWGRP) {
+        logmsg(LOG_ERR, "Redis password file %s must not be group-writable", path);
+        close(fd);
+        return NULL;
+    }
+    if (st.st_mode & S_IROTH) {
+        logmsg(LOG_ERR, "Redis password file %s must not be world-readable", path);
+        close(fd);
+        return NULL;
+    }
+    if ((st.st_mode & S_IRGRP) && st.st_gid != milter_gid) {
+        logmsg(LOG_ERR, "Redis password file %s must not be group-readable by an untrusted group", path);
+        close(fd);
+        return NULL;
+    }
+    if (st.st_size > MAX_REDIS_SECRET_SIZE) {
+        logmsg(LOG_ERR, "Redis password file %s is too large", path);
+        close(fd);
+        return NULL;
+    }
+
+    buf = malloc((size_t) st.st_size + 1);
+    if (buf == NULL) {
+        logmsg(LOG_ERR, "cannot allocate buffer for Redis password file %s: %s", path, strerror(errno));
+        close(fd);
+        return NULL;
+    }
+
+    n = read(fd, buf, (size_t) st.st_size);
+    close(fd);
+    if (n < 0) {
+        logmsg(LOG_ERR, "cannot read Redis password file %s: %s", path, strerror(errno));
+        free(buf);
+        return NULL;
+    }
+    buf[n] = '\0';
+
+    if (n != st.st_size) {
+        logmsg(LOG_ERR, "Redis password file %s changed size while reading", path);
+        free(buf);
+        return NULL;
+    }
+
+    if (memchr(buf, '\0', (size_t) n) != NULL) {
+        logmsg(LOG_ERR, "Redis password file %s contains embedded NUL bytes", path);
+        free(buf);
+        return NULL;
+    }
+
+    len = strlen(buf);
+    if (len > 0 && buf[len - 1] == '\n')
+        buf[--len] = '\0';
+    if (len > 0 && buf[len - 1] == '\r')
+        buf[--len] = '\0';
+
+    if (len == 0) {
+        logmsg(LOG_ERR, "Redis password file %s is empty", path);
+        free(buf);
+        return NULL;
+    }
+
+    return buf;
+}
+
+/*
+ * Read a credentials file containing up to two non-empty lines.  The first
+ * line is the Redis username and the second line is the password.  If only
+ * one line is present, it is treated as the password (useful for ACL users
+ * without a username).  The on-disk copy of the password is cleared before
+ * freeing the temporary read buffer.
+ */
+static int read_redis_credentials_file(const char* path, uid_t milter_uid, gid_t milter_gid) {
+    int         fd;
+    struct stat st;
+    char*       buf = NULL;
+    char*       line;
+    char*       saveptr = NULL;
+    const char* seps = "\r\n";
+    ssize_t     n;
+    size_t      len;
+    char*       parts[2] = { NULL, NULL };
+    int         count = 0;
+    int         i;
+
+    fd = open(path, O_RDONLY | O_NOFOLLOW);
+    if (fd < 0) {
+        logmsg(LOG_ERR, "cannot open Redis credentials file %s: %s", path, strerror(errno));
+        return -1;
+    }
+
+    if (fstat(fd, &st) < 0) {
+        logmsg(LOG_ERR, "cannot stat Redis credentials file %s: %s", path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+    if (!S_ISREG(st.st_mode)) {
+        logmsg(LOG_ERR, "Redis credentials file %s is not a regular file", path);
+        close(fd);
+        return -1;
+    }
+    if (st.st_uid != 0 && st.st_uid != milter_uid) {
+        logmsg(LOG_ERR, "Redis credentials file %s must be owned by root or the milter user", path);
+        close(fd);
+        return -1;
+    }
+    if (st.st_mode & S_IWOTH) {
+        logmsg(LOG_ERR, "Redis credentials file %s must not be world-writable", path);
+        close(fd);
+        return -1;
+    }
+    if (st.st_mode & S_IWGRP) {
+        logmsg(LOG_ERR, "Redis credentials file %s must not be group-writable", path);
+        close(fd);
+        return -1;
+    }
+    if (st.st_mode & S_IROTH) {
+        logmsg(LOG_ERR, "Redis credentials file %s must not be world-readable", path);
+        close(fd);
+        return -1;
+    }
+    if ((st.st_mode & S_IRGRP) && st.st_gid != milter_gid) {
+        logmsg(LOG_ERR, "Redis credentials file %s must not be group-readable by an untrusted group", path);
+        close(fd);
+        return -1;
+    }
+    if (st.st_size > MAX_REDIS_SECRET_SIZE) {
+        logmsg(LOG_ERR, "Redis credentials file %s is too large", path);
+        close(fd);
+        return -1;
+    }
+
+    buf = malloc((size_t) st.st_size + 1);
+    if (buf == NULL) {
+        logmsg(LOG_ERR, "cannot allocate buffer for Redis credentials file %s: %s", path, strerror(errno));
+        close(fd);
+        return -1;
+    }
+
+    n = read(fd, buf, (size_t) st.st_size);
+    close(fd);
+    if (n < 0) {
+        logmsg(LOG_ERR, "cannot read Redis credentials file %s: %s", path, strerror(errno));
+        free(buf);
+        return -1;
+    }
+    buf[n] = '\0';
+
+    if (n != st.st_size) {
+        logmsg(LOG_ERR, "Redis credentials file %s changed size while reading", path);
+        free(buf);
+        return -1;
+    }
+
+    for (line = strtok_r(buf, seps, &saveptr);
+         line != NULL && count < 2;
+         line = strtok_r(NULL, seps, &saveptr)) {
+        while (*line == ' ' || *line == '\t')
+            ++line;
+        if (*line == '\0' || *line == '#')
+            continue;
+        if (memchr(line, '\0', strlen(line)) != NULL) {
+            logmsg(LOG_ERR, "Redis credentials file %s contains embedded NUL bytes", path);
+            for (i = 0; i < count; i++)
+                free(parts[i]);
+            OPENSSL_cleanse(buf, (size_t) n);
+            free(buf);
+            return -1;
+        }
+        parts[count] = strdup(line);
+        if (parts[count] == NULL) {
+            logmsg(LOG_ERR, "strdup(credentials) failed: %s", strerror(errno));
+            for (i = 0; i < count; i++)
+                free(parts[i]);
+            OPENSSL_cleanse(buf, (size_t) n);
+            free(buf);
+            return -1;
+        }
+        count++;
+    }
+
+    if (count == 0) {
+        logmsg(LOG_ERR, "Redis credentials file %s contains no credentials", path);
+        OPENSSL_cleanse(buf, (size_t) n);
+        free(buf);
+        return -1;
+    }
+
+    if (count == 1) {
+        opt_redis_password = parts[0];
+        opt_redis_username = NULL;
+    } else {
+        opt_redis_username = parts[0];
+        opt_redis_password = parts[1];
+    }
+
+    if (buf != NULL) {
+        OPENSSL_cleanse(buf, (size_t) n);
+        free(buf);
+    }
+
+    return 0;
+}
+
 int main(int argc, char** argv) {
     int            c;
     char*          p;
@@ -62,10 +312,11 @@ int main(int argc, char** argv) {
     struct passwd* pw;
     struct group*  gr;
     struct stat    st;
+    struct stat    dir_st;
     int            localsocket = 1;
     mode_t         socket_mode;
     const char*    socket_mode_str;
-    char*          redis_uri_arg = NULL;
+
 
 
     /*
@@ -74,7 +325,7 @@ int main(int argc, char** argv) {
      */
     client_gid = 0;
 
-    while ((c = getopt(argc, argv, "a:bc:d:hfg:k:lm:n:P:Rr:s:t:u:vxW:")) > 0) {
+    while ((c = getopt(argc, argv, "a:bc:d:hfg:k:Il:m:n:p:P:Rr:s:t:u:vxW:C:")) > 0) {
         switch (c) {
         case 'a': /* auth-signing table CDB filename */
             opt_auth_signing_table = optarg;
@@ -126,6 +377,9 @@ int main(int argc, char** argv) {
             }
             /* access permissions will be checked later, after switching to the correct uid */
             break;
+        case 'I': /* allow INET milter socket (opt-in, no cryptographic peer auth) */
+            opt_allow_inet = 1;
+            break;
         case '?': /* help */
         case 'h':
             usage();
@@ -143,12 +397,17 @@ int main(int argc, char** argv) {
         case 'P': /* Redis key prefix */
             opt_redis_prefix = optarg;
             break;
+        case 'p': /* Redis password file */
+            opt_redis_password_file = optarg;
+            break;
         case 'R': /* Redis auth-signing table */
             opt_redis_auth_signing_table = 1;
             break;
         case 'r': /* Redis URI */
             opt_redis_uri = optarg;
-            redis_uri_arg = optarg;
+            break;
+        case 'C': /* Redis credentials file (username + password) */
+            opt_redis_credentials_file = optarg;
             break;
         case 's': /* milter socket */
             opt_miltersocket = optarg;
@@ -289,11 +548,18 @@ int main(int argc, char** argv) {
         localsocket = 0;
 
     /*
-     * The milter protocol has no peer authentication.  When a network socket is
-     * configured, it must be bound to loopback so it is not exposed to
-     * arbitrary clients.
+     * The milter protocol has no peer authentication.  Network sockets are
+     * disabled by default; they require an explicit opt-in and must still be
+     * bound to loopback so they are not exposed to arbitrary clients.
      */
     if (localsocket == 0) {
+        if (!opt_allow_inet) {
+            logmsg(LOG_ERR, "milter network socket %s is not allowed by default; use -I only if no untrusted clients can reach it, or use a Unix-domain socket", opt_miltersocket);
+            exit(EX_DATAERR);
+        }
+
+        logmsg(LOG_WARNING, "INET milter socket selected: the Milter protocol has no peer authentication and loopback binding is NOT a substitute for a Unix-domain socket trust boundary");
+
         const char* at = strrchr(opt_miltersocket, '@');
         const char* host = at ? at + 1 : NULL;
 
@@ -335,6 +601,11 @@ int main(int argc, char** argv) {
             exit(EX_DATAERR);
         }
 
+        if (socket_path[0] != '/') {
+            logmsg(LOG_ERR, "milter Unix socket path must be absolute: %s", socket_path);
+            exit(EX_DATAERR);
+        }
+
         socket_path_copy = strdup(socket_path);
         if (socket_path_copy == NULL) {
             logmsg(LOG_ERR, "strdup(socket_path) failed: %s", strerror(errno));
@@ -343,17 +614,66 @@ int main(int argc, char** argv) {
 
         slash = strrchr(socket_path_copy, '/');
         if (slash != NULL) {
-            *slash = '\0';
-            socket_dir = socket_path_copy;
+            if (slash == socket_path_copy) {
+                socket_dir = "/";
+            } else {
+                *slash = '\0';
+                socket_dir = socket_path_copy;
+            }
             socket_base = slash + 1;
         } else {
+            /* absolute paths always contain a slash; this path is unreachable */
             socket_dir = ".";
             socket_base = socket_path_copy;
         }
 
-        socket_dirfd = open(socket_dir, O_RDONLY | O_DIRECTORY);
+        /*
+         * Open the parent directory without following symlinks.  The directory
+         * is the trust boundary; subsequent socket operations are safe only if
+         * the directory cannot be renamed or replaced by an untrusted user
+         * (CWE-367).
+         */
+        socket_dirfd = open(socket_dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
         if (socket_dirfd < 0) {
             logmsg(LOG_ERR, "could not open socket directory %s: %s", socket_dir, strerror(errno));
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+
+        /*
+         * The parent directory must be a trusted, non-writable boundary.  If an
+         * untrusted user can rename entries here, fstatat/fchownat/fchmodat
+         * would be subject to a TOCTOU race even with AT_SYMLINK_NOFOLLOW.
+         */
+        if (fstat(socket_dirfd, &dir_st) < 0) {
+            logmsg(LOG_ERR, "could not stat socket directory %s: %s", socket_dir, strerror(errno));
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+        if (!S_ISDIR(dir_st.st_mode)) {
+            logmsg(LOG_ERR, "socket path parent is not a directory: %s", socket_dir);
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+        if (dir_st.st_uid != 0 && dir_st.st_uid != uid) {
+            logmsg(LOG_ERR, "socket directory %s must be owned by root or the milter user", socket_dir);
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+        if (dir_st.st_mode & S_IWOTH) {
+            logmsg(LOG_ERR, "socket directory %s must not be world-writable", socket_dir);
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_DATAERR);
+        }
+        if ((dir_st.st_mode & S_IWGRP) &&
+            !(dir_st.st_gid == gid ||
+              (opt_clientgroup != NULL && dir_st.st_gid == client_gid))) {
+            logmsg(LOG_ERR, "socket directory %s must not be group-writable by an untrusted group", socket_dir);
+            close(socket_dirfd);
             free(socket_path_copy);
             exit(EX_DATAERR);
         }
@@ -497,21 +817,32 @@ int main(int argc, char** argv) {
     if (opt_auth_signing_table)
         dict_open(opt_auth_signing_table, &dict_auth_signingtable);
 
+    /*
+     * Redis credentials must never appear in the URI or on the command line.
+     * Read any requested secret from a file so the value is not exposed in
+     * /proc/<pid>/cmdline (CWE-798).
+     */
+    if (opt_redis_credentials_file != NULL) {
+        if (read_redis_credentials_file(opt_redis_credentials_file, uid, gid) != 0)
+            exit(EX_DATAERR);
+    } else if (opt_redis_password_file != NULL) {
+        opt_redis_password = read_redis_password_file(opt_redis_password_file, uid, gid);
+        if (opt_redis_password == NULL)
+            exit(EX_DATAERR);
+    }
+
     if (redis_global_init() < 0)
         exit(EX_SOFTWARE);
 
     /*
-     * Redis credentials embedded in the URI are now parsed into g_uri.
-     * Redact the original command-line argument so it is not visible to
-     * other local users via /proc/<pid>/cmdline (CWE-798).
+     * The Redis password has been transferred to the Redis URI structure.
+     * Clear the in-process copy that was read from the credentials or
+     * password file so it is not retained longer than necessary.
      */
-    if (redis_uri_arg != NULL && *redis_uri_arg != '\0') {
-        size_t len = strlen(redis_uri_arg);
-        if (len > 0) {
-            redis_uri_arg[0] = 'x';
-            if (len > 1)
-                memset(redis_uri_arg + 1, '\0', len - 1);
-        }
+    if (opt_redis_password != NULL) {
+        OPENSSL_cleanse(opt_redis_password, strlen(opt_redis_password));
+        free(opt_redis_password);
+        opt_redis_password = NULL;
     }
 
     /* initialize OpenSSL */

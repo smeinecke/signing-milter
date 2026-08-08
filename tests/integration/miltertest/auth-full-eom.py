@@ -174,12 +174,14 @@ def main():
 
     # 7. X-Signer override when envelope sender would otherwise be signed:
     #    bob is allowed for other@example.com, but not for the X-Signer sender.
-    print("test 7: X-Signer override blocked")
+    #    The envelope signer must still be used; the rejected X-Signer only
+    #    gets stripped.
+    print("test 7: X-Signer override blocked, envelope signer kept")
     run_transaction(
         "bob@example.org",
         "<other@example.com>",
         xsigner="sender@example.com",
-        expect_signed=False,
+        expect_signed=True,
         expect_xsigner_deleted=True,
     )
 

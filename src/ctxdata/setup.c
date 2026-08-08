@@ -101,6 +101,14 @@ int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename) {
         logmsg(LOG_DEBUG, "info: certificate file not named /path/to/foo-cert+key.pem, including chaincerts disabled");
     }
 
+    /*
+     * Any previously-loaded envelope signing material is replaced only after
+     * the new signer identity has been fully loaded.  This keeps a rejected or
+     * unusable X-Signer from suppressing an already-authorized envelope signer
+     * (CWE-807).
+     */
+    ctxdata_reset_cert(ctxdata);
+
     /* transfer ownership only when everything else succeeded */
     ctxdata->pemfilename = pemcopy;
     ctxdata->cert = cert;
@@ -160,6 +168,14 @@ int ctxdata_setup_from_redis(CTXDATA* ctxdata, const char* redis_key, char* pem,
         rc = 5;
         goto cleanup;
     }
+
+    /*
+     * Any previously-loaded envelope signing material is replaced only after
+     * the new signer identity has been fully loaded.  This keeps a rejected or
+     * unusable X-Signer from suppressing an already-authorized envelope signer
+     * (CWE-807).
+     */
+    ctxdata_reset_cert(ctxdata);
 
     /* transfer ownership only when all allocations succeeded */
     ctxdata->pemfilename = pemcopy;

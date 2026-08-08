@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <openssl/crypto.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,8 @@
 
 extern const char* opt_redis_uri;
 extern const char* opt_redis_prefix;
+extern char* opt_redis_username;
+extern char* opt_redis_password;
 
 #define REDIS_KEY_MAX 1024
 
@@ -19,7 +22,36 @@ static int redis_tls_initialized = 0;
 
 #ifdef WITH_REDIS
 #include <hiredis.h>
+#include <hiredis/read.h>
 #include <sys/time.h>
+
+/*
+ * Hard limits on how much data hiredis may buffer or allocate for a single
+ * bulk reply.  These bounds are enforced by the wrapped I/O and reply object
+ * functions installed on every Redis context, so a compromised or misconfigured
+ * server cannot force unbounded allocation before the application-level size
+ * checks run (CWE-770 / CWE-789).
+ */
+#define REDIS_MAX_INPUT_LEN      (8 * 1024 * 1024)
+#define REDIS_MAX_BULK_LEN       (4 * 1024 * 1024)
+#define REDIS_READER_MAX_ARRAY   1024
+#define REDIS_READER_MAX_BUF_SIZE (64 * 1024)
+
+typedef struct {
+    redisContextFuncs orig;
+    size_t            max_input;
+} redis_conn_extra;
+
+static redisContextFuncs         redis_guarded_funcs;
+static redisContextFuncs         redis_guarded_ssl_funcs;
+static redisReplyObjectFunctions redis_guarded_reply_fns;
+static redisReplyObjectFunctions redis_original_reply_fns;
+static size_t                    redis_max_bulk_len = REDIS_MAX_BULK_LEN;
+static pthread_mutex_t           redis_guarded_lock = PTHREAD_MUTEX_INITIALIZER;
+static int                       redis_guarded_inited = 0;
+#ifdef WITH_REDIS_SSL
+static int                       redis_guarded_ssl_inited = 0;
+#endif
 
 #ifdef WITH_REDIS_SSL
 #include <arpa/inet.h>
@@ -73,7 +105,11 @@ static void redis_uri_free(void) {
     free(g_uri.host);
     free(g_uri.unix_socket);
     free(g_uri.username);
-    free(g_uri.password);
+    if (g_uri.password != NULL) {
+        OPENSSL_cleanse(g_uri.password, strlen(g_uri.password));
+        free(g_uri.password);
+        g_uri.password = NULL;
+    }
     free(g_uri.tls_cacert);
     free(g_uri.tls_capath);
     free(g_uri.tls_cert);
@@ -611,6 +647,109 @@ static int redis_reply_is_ok(redisReply* r) {
            strcmp(r->str, "OK") == 0;
 }
 
+/*
+ * Connection-specific wrapper functions that enforce resource limits before
+ * hiredis allocates unbounded amounts of memory.
+ */
+
+static redis_conn_extra* redis_conn_extra_new(const redisContextFuncs* orig) {
+    redis_conn_extra* e = calloc(1, sizeof(*e));
+    if (e == NULL)
+        return NULL;
+    e->orig = *orig;
+    e->max_input = REDIS_MAX_INPUT_LEN;
+    return e;
+}
+
+static void redis_conn_extra_free(void* p) {
+    if (p != NULL)
+        free(p);
+}
+
+static ssize_t redis_guarded_read(redisContext* c, char* buf, size_t bufcap) {
+    redis_conn_extra* e = c->privdata;
+
+    if (e == NULL)
+        return -1;
+
+    if (c->reader != NULL && c->reader->len >= e->max_input) {
+        c->err = REDIS_ERR_OTHER;
+        snprintf(c->errstr, sizeof(c->errstr),
+                 "redis: input buffer size limit exceeded");
+        return -1;
+    }
+
+    return e->orig.read(c, buf, bufcap);
+}
+
+static void* redis_guarded_create_string(const redisReadTask* task, char* str, size_t len) {
+    if (len > redis_max_bulk_len) {
+        logmsg(LOG_ERR, "redis: bulk string reply exceeds maximum allowed size (%zu > %zu)",
+               len, redis_max_bulk_len);
+        return NULL;
+    }
+    return redis_original_reply_fns.createString(task, str, len);
+}
+
+static int redis_install_guards(redisContext* c) {
+    redis_conn_extra* e;
+    const redisContextFuncs* orig = c->funcs;
+    int use_ssl = 0;
+
+#ifdef WITH_REDIS_SSL
+    use_ssl = c->privctx != NULL || g_uri.use_tls;
+#endif
+
+    if (c->privdata != NULL)
+        return 0;
+
+    pthread_mutex_lock(&redis_guarded_lock);
+
+    if (!redis_guarded_inited) {
+        redis_guarded_funcs = *orig;
+        redis_guarded_funcs.read = redis_guarded_read;
+
+        redis_original_reply_fns = *c->reader->fn;
+        redis_guarded_reply_fns = redis_original_reply_fns;
+        redis_guarded_reply_fns.createString = redis_guarded_create_string;
+
+        redis_guarded_inited = 1;
+    }
+
+#ifdef WITH_REDIS_SSL
+    if (use_ssl && !redis_guarded_ssl_inited) {
+        redis_guarded_ssl_funcs = *orig;
+        redis_guarded_ssl_funcs.read = redis_guarded_read;
+        redis_guarded_ssl_inited = 1;
+    }
+#endif
+
+    pthread_mutex_unlock(&redis_guarded_lock);
+
+    e = redis_conn_extra_new(orig);
+    if (e == NULL) {
+        logmsg(LOG_ERR, "redis: cannot allocate connection guards");
+        return -1;
+    }
+
+    c->privdata = e;
+    c->free_privdata = redis_conn_extra_free;
+
+#ifdef WITH_REDIS_SSL
+    if (use_ssl)
+        c->funcs = &redis_guarded_ssl_funcs;
+    else
+#endif
+        c->funcs = &redis_guarded_funcs;
+
+    c->reader->fn = &redis_guarded_reply_fns;
+    c->reader->privdata = &redis_max_bulk_len;
+    c->reader->maxelements = REDIS_READER_MAX_ARRAY;
+    c->reader->maxbuf = REDIS_READER_MAX_BUF_SIZE;
+
+    return 0;
+}
+
 static redisContext* redis_do_connect(void) {
     redisContext* c = NULL;
     struct timeval tv = { 5, 0 };
@@ -736,6 +875,11 @@ static redisContext* redis_do_connect(void) {
     }
 #endif
 
+    if (redis_install_guards(c) != 0) {
+        redisFree(c);
+        return NULL;
+    }
+
     if (g_uri.password != NULL) {
         redisReply* r;
         if (g_uri.username != NULL) {
@@ -852,6 +996,32 @@ int redis_global_init(void) {
     rc = redis_parse_uri(opt_redis_uri);
     if (rc < 0)
         return -1;
+
+    /*
+     * Redis passwords must never be passed on the command line.  If a password
+     * is embedded in the URI, reject it immediately.
+     */
+    if (g_uri.password != NULL) {
+        logmsg(LOG_ERR, "redis: passwords must not be embedded in the URI; use -p or -C");
+        goto init_failed;
+    }
+
+    if (opt_redis_username != NULL && *opt_redis_username != '\0') {
+        free(g_uri.username);
+        g_uri.username = strdup(opt_redis_username);
+        if (g_uri.username == NULL) {
+            logmsg(LOG_ERR, "redis: strdup(username) failed: %s", strerror(errno));
+            goto init_failed;
+        }
+    }
+
+    if (opt_redis_password != NULL && *opt_redis_password != '\0') {
+        g_uri.password = strdup(opt_redis_password);
+        if (g_uri.password == NULL) {
+            logmsg(LOG_ERR, "redis: strdup(password) failed: %s", strerror(errno));
+            goto init_failed;
+        }
+    }
 
     if (!g_uri.is_unix && !g_uri.use_tls && g_uri.host != NULL) {
         logmsg(LOG_ERR,

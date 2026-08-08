@@ -188,7 +188,7 @@ log "starting signing-milter on $MILTER_SOCKET with Redis ..."
 stdbuf -oL -eL "$BUILD_DIR/signing-milter" \
     -u "$MILTER_USER" -g "$MILTER_USER" \
     -s "$MILTER_SOCKET" -r "$REDIS_URI" -P "signing-milter:" \
-    -a "$AUTHSIGNINGTABLE_CDB" -l -d 7 \
+    -I -a "$AUTHSIGNINGTABLE_CDB" -l -d 7 \
     > "$WORK_DIR/milter.log" 2>&1 &
 MILTER_PID=$!
 

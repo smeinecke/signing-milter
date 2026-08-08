@@ -107,7 +107,7 @@ log "starting signing-milter on $MILTER_SOCKET ..."
 stdbuf -oL -eL "$BUILD_DIR/signing-milter" \
     -u "$MILTER_USER" -g "$MILTER_USER" \
     -s "$MILTER_SOCKET" -m "$WORK_DIR/signingtable.cdb" \
-    -a "$AUTHSIGNINGTABLE_CDB" -l -d 7 \
+    -I -a "$AUTHSIGNINGTABLE_CDB" -l -d 7 \
     > "$WORK_DIR/milter.log" 2>&1 &
 MILTER_PID=$!
 

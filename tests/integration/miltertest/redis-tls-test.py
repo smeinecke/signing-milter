@@ -211,7 +211,7 @@ class RedisTlsTest:
                 f.write(f"databases {databases}\n")
             f.write(f"pidfile {self.work}/redis-{port}.pid\n")
             f.write(f"logfile {self.work}/redis-{port}.log\n")
-            f.write("daemonize yes\n")
+            f.write("daemonize no\n")
             f.write(f"dir {self.work}\n")
         p = subprocess.Popen(["redis-server", conf])
         self.redis_procs.append(p)
@@ -249,18 +249,27 @@ class RedisTlsTest:
         cmd += list(args)
         return run(cmd)
 
-    def start_milter(self, uri, milter_work=None):
+    def start_milter(self, uri, milter_work=None, password=None):
         if milter_work is None:
             milter_work = tempfile.mkdtemp(dir=self.work)
         sock = os.path.join(milter_work, "miltertest.sock")
         log = os.path.join(milter_work, "milter.log")
         user = run(["id", "-un"], check=True).stdout.strip()
         group = run(["id", "-gn"], check=True).stdout.strip()
+        cmd = [
+            MILTER_BIN, "-u", user, "-g", group, "-c", ":relax",
+            "-s", f"unix:{sock}", "-l", "-d", "7",
+            "-a", self.authsigningtable_cdb,
+            "-r", uri, "-P", "signing-milter:",
+        ]
+        if password is not None:
+            pwfile = os.path.join(milter_work, "redis-password")
+            with open(pwfile, "w") as f:
+                f.write(password)
+            os.chmod(pwfile, 0o600)
+            cmd += ["-p", pwfile]
         p = subprocess.Popen(
-            [MILTER_BIN, "-u", user, "-g", group, "-c", ":relax",
-             "-s", f"unix:{sock}", "-l", "-d", "7",
-             "-a", self.authsigningtable_cdb,
-             "-r", uri, "-P", "signing-milter:"],
+            cmd,
             stdout=open(log, "w"), stderr=subprocess.STDOUT,
         )
         self.milter_procs.append(p)
@@ -415,7 +424,8 @@ class RedisTlsTest:
         self.redis_cli(port4, "HMSET", "signing-milter:sender@example.com", "pem", signing_pem, "chain", "",
                        ca=self.ca_cert, password="secret").check_returncode()
         sock, _ = self.start_milter(
-            f"rediss://:wrong@localhost:{port4}/0?verify=peer&cacert={self.ca_cert}")
+            f"rediss://localhost:{port4}/0?verify=peer&cacert={self.ca_cert}",
+            password="wrong")
         r = self.mailfrom_reply(sock)
         self.assert_reply("wrong Redis password", constants.SMFIR_TEMPFAIL, r)
 

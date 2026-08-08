@@ -412,26 +412,28 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
 
         logmsg(LOG_DEBUG, "callback_header: signerfrom_header: %s", headerv);
 
-        if (dict_reload(&dict_signingtable) < 0) {
-            logmsg(LOG_ERR, "callback_header: signing table reload failed");
-            return SMFIS_TEMPFAIL;
-        }
-
         /*
          * X-Signer is a control header and must not be trusted without an
-         * explicit authorization binding (CWE-807).
+         * explicit authorization binding (CWE-807).  A rejected, unknown, or
+         * unusable X-Signer must not suppress an already-authorized envelope
+         * signer.
          */
         auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv);
         if (auth_rc == -1) {
-            logmsg(LOG_ERR, "callback_header: auth_signing_authorized() failed");
-            free(redis_pem);
-            free(redis_chain);
+            logmsg(LOG_ERR, "%s: callback_header: X-Signer authorization check failed for '%s'",
+                   ctxdata->queueid, headerv);
+            ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+            if (ctxdata->cert != NULL)
+                return SMFIS_CONTINUE;
+            ctxdata_cleanup(ctxdata);
+            ctxdata_free(ctxdata);
+            (void) smfi_setpriv(ctx, NULL);
             return SMFIS_TEMPFAIL;
         }
         if (auth_rc == 0) {
-            logmsg(LOG_NOTICE, "%s: X-Signer '%s' not authorized for authenticated identity '%s'; mail will not be signed",
+            logmsg(LOG_NOTICE, "%s: X-Signer '%s' not authorized for authenticated identity '%s'; keeping any authorized envelope signer",
                    ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
-            ctxdata->mailflags |= MF_SIGNER_FROM_HEADER | MF_SKIP_SIGNING;
+            ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
             free(redis_pem);
             free(redis_chain);
             return SMFIS_CONTINUE;
@@ -441,8 +443,16 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
             i = redis_lookup_cert(headerv, &redis_pem, &redis_pem_len,
                                   &redis_chain, &redis_chain_len);
             if (i == -1) {
+                logmsg(LOG_ERR, "%s: callback_header: Redis lookup failed for X-Signer '%s'",
+                       ctxdata->queueid, headerv);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
                 free(redis_pem);
                 free(redis_chain);
+                if (ctxdata->cert != NULL)
+                    return SMFIS_CONTINUE;
+                ctxdata_cleanup(ctxdata);
+                ctxdata_free(ctxdata);
+                (void) smfi_setpriv(ctx, NULL);
                 return SMFIS_TEMPFAIL;
             }
             if (i == 0)
@@ -450,25 +460,41 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         }
 
         if (!redis_found) {
+            if (dict_reload(&dict_signingtable) < 0) {
+                logmsg(LOG_ERR, "%s: callback_header: signing table reload failed", ctxdata->queueid);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                free(redis_pem);
+                free(redis_chain);
+                if (ctxdata->cert != NULL)
+                    return SMFIS_CONTINUE;
+                ctxdata_cleanup(ctxdata);
+                ctxdata_free(ctxdata);
+                (void) smfi_setpriv(ctx, NULL);
+                return SMFIS_TEMPFAIL;
+            }
+
             lookup_rc = dict_lookup(&dict_signingtable, headerv,
                                     signing_value, sizeof(signing_value));
             if (lookup_rc == -1) {
-                logmsg(LOG_ERR, "callback_header: signing table lookup failed for '%s'", headerv);
+                logmsg(LOG_ERR, "%s: callback_header: signing table lookup failed for '%s'", ctxdata->queueid, headerv);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
                 free(redis_pem);
                 free(redis_chain);
+                if (ctxdata->cert != NULL)
+                    return SMFIS_CONTINUE;
+                ctxdata_cleanup(ctxdata);
+                ctxdata_free(ctxdata);
+                (void) smfi_setpriv(ctx, NULL);
                 return SMFIS_TEMPFAIL;
             }
             if (lookup_rc == 0) {
-                logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; will skip signing", ctxdata->queueid, headerv);
-                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER | MF_SKIP_SIGNING;
+                logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; keeping any authorized envelope signer", ctxdata->queueid, headerv);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
                 free(redis_pem);
                 free(redis_chain);
                 return SMFIS_CONTINUE;
             }
         }
-
-        if (ctxdata->pemfilename != NULL || ctxdata->cert != NULL)
-            ctxdata_reset_cert(ctxdata);
 
         if (redis_found) {
             logmsg(LOG_INFO, "signingdata from redis for header signer '%s'", headerv);
@@ -476,6 +502,9 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
                                               redis_chain, redis_chain_len,
                                               opt_redis_passphrase)) != 0) {
                 logmsg(LOG_ERR, "callback_header: ctxdata_setup_from_redis() failed: rc=%i, headerf=%s, headerv=%s", i, headerf, headerv);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                if (ctxdata->cert != NULL)
+                    return SMFIS_CONTINUE;
                 ctxdata_cleanup(ctxdata);
                 ctxdata_free(ctxdata);
                 (void) smfi_setpriv(ctx, NULL);
@@ -484,6 +513,9 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         } else {
             if ((i = ctxdata_setup(ctxdata, signing_value)) != 0) {
                 logmsg(LOG_ERR, "callback_header: ctxdata_setup() failed: rc=%i, headerf=%s, headerv=%s, file=%s", i, headerf, headerv, signing_value);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                if (ctxdata->cert != NULL)
+                    return SMFIS_CONTINUE;
                 ctxdata_cleanup(ctxdata);
                 ctxdata_free(ctxdata);
                 (void) smfi_setpriv(ctx, NULL);
@@ -547,9 +579,10 @@ sfsistat callback_eoh(SMFICTX* ctx) {
     /*
      * If no signing material has been loaded (unauthorized sender, missing
      * certificate, or X-Signer not found), fall through without signing.
+     * A rejected or missing X-Signer must not become the reason to skip
+     * signing when an authorized envelope signer was already loaded.
      */
-    if (ctxdata->cert == NULL &&
-        (ctxdata->mailflags & MF_SIGNER_FROM_HEADER) == 0) {
+    if (ctxdata->cert == NULL) {
         logmsg(LOG_INFO, "%s: no signing material loaded; skip signing", ctxdata->queueid);
         ctxdata->mailflags |= MF_SKIP_SIGNING;
     }
@@ -601,11 +634,6 @@ sfsistat callback_eoh(SMFICTX* ctx) {
 
     dump_mailflags(ctxdata->mailflags);
     dump_pkcs7flags(ctxdata->pkcs7flags);
-
-    if (opt_signerfromheader && ctxdata->pemfilename == NULL) {
-        logmsg(LOG_INFO, "%s: callback_eoh: no signingdata ...", ctxdata->queueid);
-        return SMFIS_ACCEPT;
-    }
 
     if ((headerchain2signingbuffer(ctx, ctxdata)) != 0) {
         logmsg(LOG_ERR, "%s: callback_eoh: headerchain2signingbuffer failed", ctxdata->queueid);
