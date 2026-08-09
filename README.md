@@ -116,6 +116,13 @@ The passphrase file is used for encrypted private keys loaded from Redis. When
 Redis is enabled, the milter queries Redis first; on a miss it falls back to the
 local CDB `signingtable`.
 
+Redis Unix-socket URIs (`-r unix:/run/redis/redis.sock`) are validated before
+the connection is used: the socket path must be absolute, the parent directory
+must not be world- or group-writable (unless protected by a sticky bit), and the
+socket peer credentials (SO_PEERCRED) must match the socket owner.  Place the
+socket in a directory owned by the Redis user and not writable by untrusted
+users.
+
 ## Auth-signing-table
 
 To allow an authenticated SMTP/SASL user to sign, an `auth-signing-table` must
@@ -129,7 +136,11 @@ lowercased or stripped of angle brackets.
 
 The selected signing identity (envelope `MAIL FROM` or the `X-Signer` header
 when `-f` is enabled) is an email address and is normalized (lowercase,
-angle brackets removed) before the authorization check.
+angle brackets removed) before the authorization check.  Note that the entire
+address is lowercased, including the local-part; this matches common MTA
+behaviour but means a case-sensitive local-part such as `Alice` and `alice`
+is treated as a single signer identity.  If your deployment distinguishes
+local-parts by case, store them as separate lowercased signer identities.
 
 ### Local CDB auth-signing-table
 

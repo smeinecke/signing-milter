@@ -346,6 +346,24 @@ sfsistat callback_envrcpt(SMFICTX* ctx, char** argv) {
 /*
  * called once for each message header.
  */
+/*
+ * Delete the first N occurrences of a header by repeatedly deleting
+ * occurrence 1.  smfi_chgheader uses 1-based header indices; calling with
+ * index 1 removes the first remaining occurrence.  Failure to delete a
+ * requested occurrence is logged and stops further attempts.
+ */
+static void delete_header_occurrences(SMFICTX* ctx, const char* queueid,
+                                      const char* headerf, int count) {
+    int i;
+    for (i = 0; i < count; i++) {
+        if (smfi_chgheader(ctx, (char*) headerf, 1, NULL) != MI_SUCCESS) {
+            logmsg(LOG_ERR, "%s: error: delete header %s failed, continue",
+                   queueid, headerf);
+            break;
+        }
+    }
+}
+
 sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
 
     CTXDATA*       ctxdata;
@@ -425,6 +443,19 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
         size_t         redis_chain_len = 0;
         int            redis_found = 0;
         int            i;
+
+        /*
+         * Process at most one X-Signer header.  Duplicates are untrusted
+         * message-controlled policy and are stripped without expensive
+         * authorization or key lookup, but the total number is remembered so
+         * that all occurrences can be deleted in callback_eom.
+         */
+        ctxdata->signer_header_count++;
+        if (ctxdata->signer_header_count > 1) {
+            ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+            logmsg(LOG_INFO, "%s: ignoring duplicate %s header", ctxdata->queueid, headerf);
+            return SMFIS_CONTINUE;
+        }
 
         logmsg(LOG_DEBUG, "callback_header: signerfrom_header: %s", headerv);
 
@@ -548,10 +579,10 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
     if (strcasecmp(headerf, HEADERNAME_SKIP_SIGNING) == 0) {
         /*
          * X-Skip-Signing is untrusted message-controlled policy.  Record that
-         * we saw it so it can be stripped, but do not honor the skip request
-         * (CWE-807).
+         * we saw it so all occurrences can be stripped, but do not honor the
+         * skip request (CWE-807).
          */
-        ctxdata->skip_signing_header_seen = 1;
+        ctxdata->skip_signing_header_seen++;
         logmsg(LOG_INFO, "%s: ignoring untrusted %s header", ctxdata->queueid, headerf);
     }
 
@@ -723,16 +754,17 @@ sfsistat callback_eom(SMFICTX* ctx) {
     }
 
     if (ctxdata->mailflags & MF_SKIP_SIGNING) {
-        if (ctxdata->mailflags & MF_SIGNER_FROM_HEADER) {
-            if (smfi_chgheader(ctx, HEADERNAME_SIGNER, 0, NULL) != MI_SUCCESS) {
-                logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SIGNER);
-            }
+        if (ctxdata->signer_header_count > 0) {
+            delete_header_occurrences(ctx, ctxdata->queueid,
+                                      HEADERNAME_SIGNER,
+                                      ctxdata->signer_header_count);
         }
-        if (ctxdata->skip_signing_header_seen) {
-            if (smfi_chgheader(ctx, HEADERNAME_SKIP_SIGNING, 0, NULL) != MI_SUCCESS) {
-                logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SKIP_SIGNING);
-            }
+        if (ctxdata->skip_signing_header_seen > 0) {
+            delete_header_occurrences(ctx, ctxdata->queueid,
+                                      HEADERNAME_SKIP_SIGNING,
+                                      ctxdata->skip_signing_header_seen);
         }
+        ctxdata_cleanup(ctxdata);
        return SMFIS_CONTINUE;
     }
 
@@ -740,10 +772,10 @@ sfsistat callback_eom(SMFICTX* ctx) {
      * X-Skip-Signing may have been ignored, but the header still has to be
      * stripped so it is not visible in the delivered message.
      */
-    if (ctxdata->skip_signing_header_seen) {
-        if (smfi_chgheader(ctx, HEADERNAME_SKIP_SIGNING, 0, NULL) != MI_SUCCESS) {
-            logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SKIP_SIGNING);
-        }
+    if (ctxdata->skip_signing_header_seen > 0) {
+        delete_header_occurrences(ctx, ctxdata->queueid,
+                                  HEADERNAME_SKIP_SIGNING,
+                                  ctxdata->skip_signing_header_seen);
     }
 
     /*
@@ -863,12 +895,12 @@ sfsistat callback_eom(SMFICTX* ctx) {
     }
 
     /*
-     * if present: delete HEADERNAME_SIGNER
+     * if present: delete all X-Signer headers
      */
-    if (ctxdata->mailflags & MF_SIGNER_FROM_HEADER) {
-        if (smfi_chgheader(ctx, HEADERNAME_SIGNER, 0, NULL) != MI_SUCCESS) {
-            logmsg(LOG_ERR, "%s: error: callback_eom: delete Header %s failed, continue", ctxdata->queueid, HEADERNAME_SIGNER);
-        }
+    if (ctxdata->signer_header_count > 0) {
+        delete_header_occurrences(ctx, ctxdata->queueid,
+                                  HEADERNAME_SIGNER,
+                                  ctxdata->signer_header_count);
     }
 
     if (keepdir != NULL) {
@@ -1004,6 +1036,12 @@ sfsistat callback_eom(SMFICTX* ctx) {
 
     /* statistics */
     inc_stats(&duration);
+
+    /*
+     * Per-message heavyweight state is no longer needed; release it before the
+     * SMTP connection becomes idle.
+     */
+    ctxdata_cleanup(ctxdata);
 
     return SMFIS_CONTINUE;
 }

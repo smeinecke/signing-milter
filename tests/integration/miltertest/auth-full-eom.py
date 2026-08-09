@@ -48,29 +48,39 @@ def _assert_signed(state, auth_identity, envfrom, xsigner):
             f"content_type_added={state['content_type_added']})"
         )
 
-    if state["expect_xsigner_deleted"] and not state["xsigner_deleted"]:
+    if state["expect_xsigner_deleted"] and state["xsigner_deleted_count"] == 0:
         raise AssertionError(
             f"expected X-Signer header to be deleted for auth={auth_identity}, "
             f"envfrom={envfrom}, xsigner={xsigner}"
         )
 
-    if not state["expect_xsigner_deleted"] and state["xsigner_deleted"]:
+    if not state["expect_xsigner_deleted"] and state["xsigner_deleted_count"] > 0:
         raise AssertionError(
             f"did not expect X-Signer header to be deleted for auth={auth_identity}, "
             f"envfrom={envfrom}, xsigner={xsigner}"
         )
 
+    if state["expect_xsigner_count"] > 0 and state["xsigner_deleted_count"] != state["expect_xsigner_count"]:
+        raise AssertionError(
+            f"expected {state['expect_xsigner_count']} X-Signer header deletions, "
+            f"got {state['xsigner_deleted_count']} for auth={auth_identity}, "
+            f"envfrom={envfrom}, xsigners={xsigner or xsigners}"
+        )
 
-def run_transaction(auth_identity, envfrom, xsigner=None, expect_signed=True, expect_xsigner_deleted=False):
+
+def run_transaction(auth_identity, envfrom, xsigner=None, xsigners=None,
+                    expect_signed=True, expect_xsigner_deleted=False,
+                    expect_xsigner_count=0):
     """Run a single milter transaction and assert on signing and header deletion."""
 
     body = "This is a test message.\r\n"
     state = {
         "expect_signed": expect_signed,
         "expect_xsigner_deleted": expect_xsigner_deleted,
+        "expect_xsigner_count": expect_xsigner_count,
         "body_replaced": False,
         "content_type_added": False,
-        "xsigner_deleted": False,
+        "xsigner_deleted_count": 0,
     }
 
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -104,6 +114,9 @@ def run_transaction(auth_identity, envfrom, xsigner=None, expect_signed=True, ex
     ]
     if xsigner:
         headers.append(("X-Signer", xsigner))
+    if xsigners:
+        for xs in xsigners:
+            headers.append(("X-Signer", xs))
     _send_headers(mc, headers)
 
     r = mc.send_get(constants.SMFIC_EOH)
@@ -128,7 +141,7 @@ def run_transaction(auth_identity, envfrom, xsigner=None, expect_signed=True, ex
             and data.get("name") == "X-Signer"
             and data.get("value") == ""
         ):
-            state["xsigner_deleted"] = True
+            state["xsigner_deleted_count"] += 1
 
     sock.close()
 
@@ -188,6 +201,30 @@ def main():
     # 8. Case-insensitive and angle-bracket normalization.
     print("test 8: case/bracket normalization")
     run_transaction("case@example.org", "<SENDER@EXAMPLE.COM>", expect_signed=True)
+
+    # 9. Duplicate X-Signer: first valid header is used, the rest are ignored
+    #    but all occurrences are deleted.
+    print("test 9: duplicate X-Signer ignored, first used")
+    run_transaction(
+        "alice@example.org",
+        "<third@example.com>",
+        xsigners=["sender@example.com", "other@example.com"],
+        expect_signed=True,
+        expect_xsigner_deleted=True,
+        expect_xsigner_count=2,
+    )
+
+    # 10. Duplicate X-Signer with an unauthorized first header: the first is
+    #     rejected and the duplicate is ignored; envelope signer is kept.
+    print("test 10: duplicate X-Signer ignored, first rejected")
+    run_transaction(
+        "bob@example.org",
+        "<other@example.com>",
+        xsigners=["sender@example.com", "sales@example.com"],
+        expect_signed=True,
+        expect_xsigner_deleted=True,
+        expect_xsigner_count=2,
+    )
 
     print("PASS")
 

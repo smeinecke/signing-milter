@@ -1,12 +1,19 @@
 #include "redis.h"
 
+#define _GNU_SOURCE
 #include <errno.h>
+#include <fcntl.h>
+#include <libgen.h>
 #include <limits.h>
 #include <openssl/crypto.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "address.h"
 #include "utils.h"
@@ -932,12 +939,121 @@ static int redis_install_guards(redisContext* c) {
     return 0;
 }
 
+/*
+ * Validate the parent directory of a Redis Unix-socket path.  The directory
+ * must not be world-writable or group-writable by a non-root group, otherwise
+ * an unprivileged process could replace the socket with a malicious one.
+ */
+static int redis_validate_unix_socket_dir(const char* path) {
+    char*       path_copy = strdup(path);
+    char*       dir;
+    int         dirfd;
+    int         rc = -1;
+    struct stat st;
+
+    if (path_copy == NULL) {
+        logmsg(LOG_ERR, "redis: strdup(unix socket path) failed");
+        return -1;
+    }
+
+    dir = dirname(path_copy);
+
+    dirfd = open(dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    if (dirfd < 0) {
+        logmsg(LOG_ERR, "redis: cannot open Unix socket directory %s: %s",
+               dir, strerror(errno));
+        free(path_copy);
+        return -1;
+    }
+
+    if (fstat(dirfd, &st) < 0) {
+        logmsg(LOG_ERR, "redis: cannot stat Unix socket directory %s: %s",
+               dir, strerror(errno));
+        goto out;
+    }
+
+    if (!S_ISDIR(st.st_mode)) {
+        logmsg(LOG_ERR, "redis: Unix socket path parent %s is not a directory",
+               dir);
+        goto out;
+    }
+
+    if ((st.st_mode & S_IWOTH) && !(st.st_mode & S_ISVTX)) {
+        logmsg(LOG_ERR, "redis: Unix socket directory %s is world-writable without a sticky bit",
+               dir);
+        goto out;
+    }
+
+    if ((st.st_mode & S_IWGRP) && st.st_gid != 0 && !(st.st_mode & S_ISVTX)) {
+        logmsg(LOG_ERR, "redis: Unix socket directory %s is group-writable by a non-root group without a sticky bit",
+               dir);
+        goto out;
+    }
+
+    rc = 0;
+out:
+    close(dirfd);
+    free(path_copy);
+    return rc;
+}
+
+/*
+ * Validate the peer of a Redis Unix-socket connection.  The socket inode owner
+ * must match the peer UID obtained via SO_PEERCRED, so we are talking to the
+ * process that created the socket.  This only validates the peer, not the
+ * directory; redis_validate_unix_socket_dir() must be called first.
+ */
+static int redis_validate_unix_socket_peer(redisContext* c) {
+    struct ucred cred;
+    socklen_t    cred_len = sizeof(cred);
+    struct stat  st;
+
+    if (getsockopt(c->fd, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len) != 0) {
+        logmsg(LOG_ERR, "redis: cannot obtain Unix socket peer credentials: %s",
+               strerror(errno));
+        return -1;
+    }
+
+    if (fstat(c->fd, &st) < 0) {
+        logmsg(LOG_ERR, "redis: cannot stat connected Unix socket: %s",
+               strerror(errno));
+        return -1;
+    }
+
+    if (!S_ISSOCK(st.st_mode)) {
+        logmsg(LOG_ERR, "redis: connected file descriptor is not a socket");
+        return -1;
+    }
+
+    if (cred.uid != st.st_uid) {
+        logmsg(LOG_ERR, "redis: Unix socket peer uid %d does not match socket owner %d",
+               (int) cred.uid, (int) st.st_uid);
+        return -1;
+    }
+
+    return 0;
+}
+
 static redisContext* redis_do_connect(void) {
     redisContext* c = NULL;
     struct timeval tv = { 5, 0 };
 
     if (g_uri.is_unix) {
+        if (g_uri.unix_socket == NULL || g_uri.unix_socket[0] != '/') {
+            logmsg(LOG_ERR, "redis: Unix socket path must be absolute");
+            return NULL;
+        }
+        if (redis_validate_unix_socket_dir(g_uri.unix_socket) != 0)
+            return NULL;
+
         c = redisConnectUnix(g_uri.unix_socket);
+
+        if (c != NULL && c->err == 0) {
+            if (redis_validate_unix_socket_peer(c) != 0) {
+                redisFreeGuarded(c);
+                return NULL;
+            }
+        }
     } else {
         c = redisConnectWithTimeout(g_uri.host, g_uri.port, tv);
     }

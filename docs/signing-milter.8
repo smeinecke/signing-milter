@@ -59,7 +59,9 @@ the value (right side) is a comma or whitespace separated list of signing
 identities.
 Email addresses in the value are normalized (lower case, angle brackets removed)
 before comparison; the authenticated identity is treated as an opaque string and
-is not normalized.
+is not normalized.  The entire signer address is lowercased, including the
+local-part; deployments that treat local-parts as case-sensitive must store
+signer identities in a consistent lowercased form.
 Authenticated signing is only permitted when either
 .B \-a
 or
@@ -246,6 +248,12 @@ certificate.
 .IR verify=peer
 performs full chain and hostname/IP verification (this is the default and only
 supported mode); TLS connections without peer verification are rejected.
+For
+.IR unix:///path/to/redis.sock ,
+the path must be absolute, the parent directory must not be world- or
+group-writable (unless a sticky bit is set), and the socket peer credentials
+must match the socket owner.  The socket should be placed in a directory
+controlled by the Redis user.
 .IR verify_name=hostname
 overrides the identity that is verified; the default is the URI host.
 .IR sni=hostname

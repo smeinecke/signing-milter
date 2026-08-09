@@ -109,6 +109,7 @@ struct ctxdata {
     size_t          rcpt_count;
     size_t          rcpt_skip_count;
     int             skip_signing_header_seen;
+    int             signer_header_count;
 };
 #define CTXDATA struct ctxdata
 
