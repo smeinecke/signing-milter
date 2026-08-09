@@ -17,7 +17,7 @@ int opt_logdest  = LOG_DEST_STDOUT;
 /* Redis configuration globals referenced by redis.c. */
 const char* opt_redis_uri = NULL;
 const char* opt_redis_prefix = "signing-milter:";
-const char* opt_redis_passphrase = NULL;
+char*       opt_redis_passphrase = NULL;
 char*       opt_redis_username = NULL;
 char*       opt_redis_password = NULL;
 

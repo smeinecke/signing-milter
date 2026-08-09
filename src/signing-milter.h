@@ -145,7 +145,7 @@ extern char*       opt_redis_username;
 
 extern const char* opt_redis_uri;
 extern const char* opt_redis_prefix;
-extern const char* opt_redis_passphrase;
+extern char*       opt_redis_passphrase;
 
 extern struct DICT dict_signingtable;
 

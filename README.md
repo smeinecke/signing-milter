@@ -229,10 +229,13 @@ In default configuration the postfix daemon is chrooted to the spool folder loca
 OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfix"
 ```
 
-Also create the folder within the postfix spool folder with the correct permissions:
+Also create the folder within the postfix spool folder with the correct
+permissions.  When the milter starts as root the socket directory must be
+root-owned, otherwise a prior (compromised) daemon instance could race the
+socket creation:
 ```bash
-mkdir -m o-rwx /var/spool/postfix/signing-milter
-chown signing-milter:postfix /var/spool/postfix/signing-milter
+install -d -o root -g postfix -m 0750 \
+    /var/spool/postfix/signing-milter
 ```
 
 The socket has to be configured in postfix as a milter on the appropriate
@@ -244,10 +247,11 @@ smtpd_milters = unix:signing-milter/signing-milter.sock
 
 > **Warning:** Do not attach `signing-milter` globally to an Internet-facing
 > MX listening on port 25 unless you have another trusted mechanism that
-> guarantees the sender is authorized for the signing identity.  When using the
-> optional `auth-signing-table`, configure the milter only on the authenticated
-> `submission` service, and combine it with Postfix
-> `smtpd_sender_login_maps` / `reject_authenticated_sender_login_mismatch`.
+> guarantees the sender is authorized for the signing identity.  When an
+> `auth-signing-table` is configured (required for authenticated-sender signing),
+> use the milter only on the authenticated `submission` service, and combine it
+> with Postfix `smtpd_sender_login_maps` /
+> `reject_authenticated_sender_login_mismatch`.
 
 And reload/restart the services:
 ```bash

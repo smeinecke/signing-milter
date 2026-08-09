@@ -35,10 +35,13 @@ uses the
 interface, originally distributed as part of version 8.11 of
 .B sendmail(8),
 to provide signing service for mail transiting a milter-aware MTA.
-Messages are signed if the RFC5321.MailFrom is found in a signing-table,
-certs are present and usable and a header
+Messages are signed if the RFC5321.MailFrom is found in a signing-table
+and certs are present and usable.
+A header
 .I X-Skip-Signing
-does not exist.
+is untrusted message-controlled policy and is therefore ignored; the
+milter records that it was seen so it can be stripped from the signed
+output.
 .\"
 .SH OPTIONS
 .TP

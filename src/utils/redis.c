@@ -1023,6 +1023,10 @@ static redisContext* redis_do_connect(void) {
         }
 
         /*
+         * From here on, hiredis owns the SSL object and will free it when the
+         * context is destroyed.  Post-handshake verification errors must not
+         * call SSL_free() again.
+         *
          * OpenSSL's SSL_VERIFY_PEER only guarantees a trusted chain; hostname
          * identity must be verified explicitly (CWE-297).
          */
@@ -1031,7 +1035,6 @@ static redisContext* redis_do_connect(void) {
             if (verify_result != X509_V_OK) {
                 logmsg(LOG_ERR, "redis: TLS peer verification failed: %s",
                        X509_verify_cert_error_string(verify_result));
-                SSL_free(ssl);
                 redisFreeGuarded(c);
                 return NULL;
             }
@@ -1040,14 +1043,12 @@ static redisContext* redis_do_connect(void) {
                 X509* cert = SSL_get1_peer_certificate(ssl);
                 if (cert == NULL) {
                     logmsg(LOG_ERR, "redis: no peer certificate presented");
-                    SSL_free(ssl);
                     redisFreeGuarded(c);
                     return NULL;
                 }
                 if (X509_check_host(cert, verify_name, strlen(verify_name), 0, NULL) != 1) {
                     logmsg(LOG_ERR, "redis: TLS certificate does not match hostname '%s'", verify_name);
                     X509_free(cert);
-                    SSL_free(ssl);
                     redisFreeGuarded(c);
                     return NULL;
                 }

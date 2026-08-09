@@ -25,7 +25,8 @@ int         opt_signerfromheader = 0;
 
 const char* opt_redis_uri = NULL;
 const char* opt_redis_prefix = "signing-milter:";
-const char* opt_redis_passphrase = NULL;
+const char* opt_redis_passphrase_file = NULL;
+char*       opt_redis_passphrase = NULL;
 const char* opt_redis_password_file = NULL;
 const char* opt_redis_credentials_file = NULL;
 char*       opt_redis_password = NULL;
@@ -65,11 +66,13 @@ static pthread_t stats_thread;
 
 /*
  * Read a single secret from a file.  The file must not be a symlink, must be
- * readable by the milter process, and must not be overly permissive.  The
- * returned string is NUL terminated and has any trailing newline removed; the
- * caller is responsible for clearing and freeing it.
+ * a regular file, must be readable by the milter process, and must not be
+ * overly permissive.  The returned string is NUL terminated and has any
+ * trailing newline removed; the caller is responsible for clearing and freeing
+ * it.  This is used for both the Redis password file (-p) and the private-key
+ * passphrase file (-W).
  */
-static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t milter_gid) {
+static char* read_secret_file(const char* path, uid_t milter_uid, gid_t milter_gid, size_t max_size) {
     int         fd;
     struct stat st;
     char*       buf = NULL;
@@ -78,54 +81,54 @@ static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t 
 
     fd = open(path, O_RDONLY | O_NOFOLLOW);
     if (fd < 0) {
-        logmsg(LOG_ERR, "cannot open Redis password file %s: %s", path, strerror(errno));
+        logmsg(LOG_ERR, "cannot open secret file %s: %s", path, strerror(errno));
         return NULL;
     }
 
     if (fstat(fd, &st) < 0) {
-        logmsg(LOG_ERR, "cannot stat Redis password file %s: %s", path, strerror(errno));
+        logmsg(LOG_ERR, "cannot stat secret file %s: %s", path, strerror(errno));
         close(fd);
         return NULL;
     }
     if (!S_ISREG(st.st_mode)) {
-        logmsg(LOG_ERR, "Redis password file %s is not a regular file", path);
+        logmsg(LOG_ERR, "secret file %s is not a regular file", path);
         close(fd);
         return NULL;
     }
     if (st.st_uid != 0 && st.st_uid != milter_uid) {
-        logmsg(LOG_ERR, "Redis password file %s must be owned by root or the milter user", path);
+        logmsg(LOG_ERR, "secret file %s must be owned by root or the milter user", path);
         close(fd);
         return NULL;
     }
     if (st.st_mode & S_IWOTH) {
-        logmsg(LOG_ERR, "Redis password file %s must not be world-writable", path);
+        logmsg(LOG_ERR, "secret file %s must not be world-writable", path);
         close(fd);
         return NULL;
     }
     if (st.st_mode & S_IWGRP) {
-        logmsg(LOG_ERR, "Redis password file %s must not be group-writable", path);
+        logmsg(LOG_ERR, "secret file %s must not be group-writable", path);
         close(fd);
         return NULL;
     }
     if (st.st_mode & S_IROTH) {
-        logmsg(LOG_ERR, "Redis password file %s must not be world-readable", path);
+        logmsg(LOG_ERR, "secret file %s must not be world-readable", path);
         close(fd);
         return NULL;
     }
     if ((st.st_mode & S_IRGRP) && st.st_gid != milter_gid) {
-        logmsg(LOG_ERR, "Redis password file %s must not be group-readable by an untrusted group", path);
+        logmsg(LOG_ERR, "secret file %s must not be group-readable by an untrusted group", path);
         close(fd);
         return NULL;
     }
-    if (st.st_size > MAX_REDIS_SECRET_SIZE) {
-        logmsg(LOG_ERR, "Redis password file %s is too large", path);
+    if ((size_t) st.st_size > max_size) {
+        logmsg(LOG_ERR, "secret file %s is too large", path);
         close(fd);
         return NULL;
     }
 
     buf = malloc((size_t) st.st_size + 1);
     if (buf == NULL) {
-        logmsg(LOG_ERR, "cannot allocate buffer for Redis password file %s: %s", path, strerror(errno));
+        logmsg(LOG_ERR, "cannot allocate buffer for secret file %s: %s", path, strerror(errno));
         close(fd);
         return NULL;
     }
@@ -133,7 +136,7 @@ static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t 
     n = read(fd, buf, (size_t) st.st_size);
     close(fd);
     if (n < 0) {
-        logmsg(LOG_ERR, "cannot read Redis password file %s: %s", path, strerror(errno));
+        logmsg(LOG_ERR, "cannot read secret file %s: %s", path, strerror(errno));
         OPENSSL_cleanse(buf, (size_t) st.st_size + 1);
         free(buf);
         return NULL;
@@ -141,14 +144,14 @@ static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t 
     buf[n] = '\0';
 
     if (n != st.st_size) {
-        logmsg(LOG_ERR, "Redis password file %s changed size while reading", path);
+        logmsg(LOG_ERR, "secret file %s changed size while reading", path);
         OPENSSL_cleanse(buf, (size_t) n);
         free(buf);
         return NULL;
     }
 
     if (memchr(buf, '\0', (size_t) n) != NULL) {
-        logmsg(LOG_ERR, "Redis password file %s contains embedded NUL bytes", path);
+        logmsg(LOG_ERR, "secret file %s contains embedded NUL bytes", path);
         OPENSSL_cleanse(buf, (size_t) n);
         free(buf);
         return NULL;
@@ -161,7 +164,7 @@ static char* read_redis_password_file(const char* path, uid_t milter_uid, gid_t 
         buf[--len] = '\0';
 
     if (len == 0) {
-        logmsg(LOG_ERR, "Redis password file %s is empty", path);
+        logmsg(LOG_ERR, "secret file %s is empty", path);
         OPENSSL_cleanse(buf, (size_t) n);
         free(buf);
         return NULL;
@@ -441,33 +444,7 @@ int main(int argc, char** argv) {
             version();
             exit(EX_OK);
         case 'W': /* Redis static passphrase file */
-            {
-                int fd;
-                ssize_t r;
-                size_t len;
-                char buf[4096];
-
-                if ((fd = open(optarg, O_RDONLY)) < 0) {
-                    logmsg(LOG_ERR, "cannot open passphrase file %s: %s", optarg, strerror(errno));
-                    exit(EX_DATAERR);
-                }
-                r = read(fd, buf, sizeof(buf) - 1);
-                close(fd);
-                if (r < 0) {
-                    logmsg(LOG_ERR, "cannot read passphrase file %s: %s", optarg, strerror(errno));
-                    exit(EX_DATAERR);
-                }
-                buf[r] = '\0';
-                len = strlen(buf);
-                if (len > 0 && buf[len - 1] == '\n')
-                    buf[len - 1] = '\0';
-
-                opt_redis_passphrase = strdup(buf);
-                if (opt_redis_passphrase == NULL) {
-                    logmsg(LOG_ERR, "strdup(passphrase) failed: %s", strerror(errno));
-                    exit(EX_SOFTWARE);
-                }
-            }
+            opt_redis_passphrase_file = optarg;
             break;
         case 'x': /* add X-Header */
             opt_addxheader = (int) !opt_addxheader;
@@ -587,12 +564,6 @@ int main(int argc, char** argv) {
         const char* socket_dir;
         int         socket_dirfd;
 
-        /* open the socket */
-        if (smfi_opensocket(REMOVE_EXISTING_SOCKETS) != MI_SUCCESS) {
-            logmsg(LOG_ERR, "could not open milter socket %s", opt_miltersocket);
-            exit(EX_SOFTWARE);
-        }
-
         /*
          * Resolve the socket path unambiguously from the libmilter socket
          * specification (CWE-367 / prefix confusion).
@@ -699,13 +670,24 @@ int main(int argc, char** argv) {
         /*
          * For a privileged startup the directory must not be group-writable by
          * a non-root group either; otherwise a process in that group can
-         * rename the socket between smfi_opensocket() and fchownat().
+         * replace the socket between smfi_opensocket() and fchownat().
          */
         if (getuid() == 0 && (dir_st.st_mode & S_IWGRP) && dir_st.st_gid != 0) {
             logmsg(LOG_ERR, "socket directory %s must not be group-writable by a non-root group when milter starts as root", socket_dir);
             close(socket_dirfd);
             free(socket_path_copy);
             exit(EX_DATAERR);
+        }
+
+        /*
+         * The directory is the trust boundary; validate it before asking
+         * libmilter to create or remove any socket object (CWE-367).
+         */
+        if (smfi_opensocket(REMOVE_EXISTING_SOCKETS) != MI_SUCCESS) {
+            logmsg(LOG_ERR, "could not open milter socket %s", opt_miltersocket);
+            close(socket_dirfd);
+            free(socket_path_copy);
+            exit(EX_SOFTWARE);
         }
 
         /* Verify the created object is actually a socket and was not replaced. */
@@ -857,8 +839,14 @@ int main(int argc, char** argv) {
         if (read_redis_credentials_file(opt_redis_credentials_file, uid, gid) != 0)
             exit(EX_DATAERR);
     } else if (opt_redis_password_file != NULL) {
-        opt_redis_password = read_redis_password_file(opt_redis_password_file, uid, gid);
+        opt_redis_password = read_secret_file(opt_redis_password_file, uid, gid, MAX_REDIS_SECRET_SIZE);
         if (opt_redis_password == NULL)
+            exit(EX_DATAERR);
+    }
+
+    if (opt_redis_passphrase_file != NULL) {
+        opt_redis_passphrase = read_secret_file(opt_redis_passphrase_file, uid, gid, MAX_REDIS_SECRET_SIZE);
+        if (opt_redis_passphrase == NULL)
             exit(EX_DATAERR);
     }
 
@@ -937,6 +925,13 @@ int main(int argc, char** argv) {
     /* cleanup OpenSSL */
     ERR_free_strings();
     EVP_cleanup();
+
+    /* Clear any in-memory secrets before exit. */
+    if (opt_redis_passphrase != NULL) {
+        OPENSSL_cleanse(opt_redis_passphrase, strlen(opt_redis_passphrase));
+        free(opt_redis_passphrase);
+        opt_redis_passphrase = NULL;
+    }
 
     output_stats();
 
