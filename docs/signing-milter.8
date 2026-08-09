@@ -62,17 +62,29 @@ before comparison; the authenticated identity is treated as an opaque string and
 is not normalized.  The entire signer address is lowercased, including the
 local-part; deployments that treat local-parts as case-sensitive must store
 signer identities in a consistent lowercased form.
-Authenticated signing is only permitted when either
+If either
 .B \-a
 or
 .B \-R
-is configured; without an auth-signing-table an authenticated principal is not
-authorized to use any signing identity.
+is configured, the configured auth-signing table is authoritative and
+certificate-CN fallback is not consulted.
 When the auth-signing-table is configured, a message is only signed if the
 authenticated identity is authorized for the signing identity selected from the
 envelope sender or the
 .B X-Signer
 header (if \-f is enabled).
+If neither
+.B \-a
+nor
+.B \-R
+is configured,
+.I signing-milter
+falls back to certificate-CN authorization.  The selected signer's certificate
+must contain exactly one subject Common Name (CN), and that CN must match the
+authenticated SASL identity from
+.IR {auth_authen}
+exactly (case-sensitive, opaque string comparison).  Ambiguous certificates
+(no CN or multiple CN attributes) or a CN mismatch result in denial.
 Messages with an unauthorized or missing authentication identity are not signed.
 .TP
 .B \-h
@@ -346,6 +358,10 @@ and
 so an authenticated client cannot use an envelope sender it does not own.
 Otherwise unauthorized senders may be able to obtain S/MIME signatures for
 addresses they do not control.
+When only certificate-CN fallback is in use (neither \-a nor \-R), the same
+restriction applies: an attacker who can obtain a certificate with a victim's
+CN could sign as that victim if the PKI does not strictly bind CN values to
+SMTP/SASL identities.
 .\"
 .SH ACCOUNTS
 You may start signing-milter as root. In this case

@@ -27,6 +27,9 @@ echo "=== integration tests ==="
 echo "=== auth-signing integration tests (local CDB) ==="
 "$SCRIPT_DIR/integration/run-miltertest-auth.sh" "$BUILD_DIR"
 
+echo "=== certificate-CN fallback integration tests ==="
+"$SCRIPT_DIR/integration/run-miltertest-cert-fallback.sh" "$BUILD_DIR"
+
 if command -v redis-server >/dev/null 2>&1; then
     echo "=== auth-signing integration tests (Redis) ==="
     "$SCRIPT_DIR/integration/run-miltertest-auth-redis.sh" "$BUILD_DIR"

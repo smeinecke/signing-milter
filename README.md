@@ -125,9 +125,17 @@ users.
 
 ## Auth-signing-table
 
-To allow an authenticated SMTP/SASL user to sign, an `auth-signing-table` must
-be configured.  Without `-a` (local CDB) or `-R` (Redis) no authenticated
-principal is authorized to use any signing identity.
+To allow an authenticated SMTP/SASL user to sign, an `auth-signing-table` can
+be configured with `-a` (local CDB) or `-R` (Redis).  If either option is set,
+that table is authoritative.
+
+If neither `-a` nor `-R` is configured, `signing-milter` falls back to
+certificate-based authorization.  The selected signer must have a certificate
+whose subject contains **exactly one Common Name (CN)**, and that CN must match
+the authenticated SASL identity from `{auth_authen}` exactly (case-sensitive,
+opaque string comparison).  This fallback is intended for deployments where the
+organization's PKI deliberately encodes the SMTP/SASL account identity in the
+certificate CN.
 
 The authenticated identity is read from the libmilter macro `{auth_authen}`.
 This macro contains the SASL login name, which is treated as an **opaque
@@ -141,6 +149,33 @@ address is lowercased, including the local-part; this matches common MTA
 behaviour but means a case-sensitive local-part such as `Alice` and `alice`
 is treated as a single signer identity.  If your deployment distinguishes
 local-parts by case, store them as separate lowercased signer identities.
+
+### Certificate-CN fallback (no `-a` / `-R`)
+
+Without `-a` or `-R`, the milter uses the selected signer's certificate as the
+authorization source.  The certificate subject must contain exactly one CN, and
+that CN is compared byte-for-byte with `{auth_authen}`.
+
+```text
+{auth_authen} = alice
+signer certificate subject CN = alice
+=> allowed
+
+{auth_authen} = bob
+signer certificate subject CN = alice
+=> denied
+
+{auth_authen} = alice
+signer certificate subject CN = Alice
+=> denied (case-sensitive)
+```
+
+Authorization is denied if the certificate is missing, contains no CN, or
+contains multiple CN attributes.  This fallback only works when the
+organization's PKI deliberately places the SMTP/SASL account identity in the
+certificate CN.  Explicit auth tables (`-a`/`-R`) are recommended when the CN
+cannot be kept in a strict one-to-one relationship with SMTP authentication
+identities.
 
 ### Local CDB auth-signing-table
 

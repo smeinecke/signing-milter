@@ -108,6 +108,110 @@ struct smfiDesc callbacks = {
 };
 
 /*
+ * Container for signer material resolved before authorization.  This allows
+ * certificate-CN fallback to inspect the certificate (and only the certificate)
+ * before the private key is loaded.
+ */
+typedef struct {
+    X509* cert;
+    int   from_redis;
+    int   resolved;
+    char  signing_value[4096];
+    char* redis_pem;
+    size_t redis_pem_len;
+    char* redis_chain;
+    size_t redis_chain_len;
+} signer_lookup_t;
+
+static void signer_lookup_init(signer_lookup_t* sl) {
+    bzero(sl, sizeof(*sl));
+}
+
+static void signer_lookup_cleanup(signer_lookup_t* sl) {
+    if (sl == NULL)
+        return;
+    if (sl->cert != NULL) {
+        X509_free(sl->cert);
+        sl->cert = NULL;
+    }
+    if (sl->redis_pem != NULL) {
+        OPENSSL_cleanse(sl->redis_pem, sl->redis_pem_len);
+        free(sl->redis_pem);
+        sl->redis_pem = NULL;
+        sl->redis_pem_len = 0;
+    }
+    if (sl->redis_chain != NULL) {
+        free(sl->redis_chain);
+        sl->redis_chain = NULL;
+        sl->redis_chain_len = 0;
+    }
+}
+
+/*
+ * Resolve a signer identity to a certificate for authorization purposes.
+ * Returns 1 if a certificate was found, 0 if no signing material exists, and
+ * -1 on error.  On success, sl->cert is set and sl->resolved is set; the
+ * caller may also use sl->signing_value (local) or sl->redis_pem/chain (Redis)
+ * to load the full signing material after authorization succeeds.  The private
+ * key is never parsed by this function.
+ */
+static int signer_lookup_cert(const char* signer_identity, signer_lookup_t* sl) {
+
+    int lookup_rc = 0;
+
+    if (signer_identity == NULL || *signer_identity == '\0')
+        return 0;
+
+    if (opt_redis_uri != NULL && *opt_redis_uri != '\0') {
+        int rc = redis_lookup_cert(signer_identity,
+                                   &sl->redis_pem, &sl->redis_pem_len,
+                                   &sl->redis_chain, &sl->redis_chain_len);
+        if (rc == -1) {
+            logmsg(LOG_ERR, "signer_lookup_cert: redis lookup failed for '%s'", signer_identity);
+            return -1;
+        }
+        if (rc == 0 && sl->redis_pem != NULL) {
+            sl->cert = load_pem_cert_mem(sl->redis_pem, sl->redis_pem_len);
+            if (sl->cert == NULL) {
+                logmsg(LOG_ERR, "signer_lookup_cert: certificate parsing failed for Redis signer '%s'", signer_identity);
+                return -1;
+            }
+            sl->resolved = 1;
+            sl->from_redis = 1;
+            return 1;
+        }
+    }
+
+    if (dict_reload(&dict_signingtable) < 0) {
+        logmsg(LOG_ERR, "signer_lookup_cert: signing table reload failed");
+        return -1;
+    }
+
+    lookup_rc = dict_lookup(&dict_signingtable, signer_identity,
+                            sl->signing_value, sizeof(sl->signing_value));
+    if (lookup_rc == -1) {
+        logmsg(LOG_ERR, "signer_lookup_cert: signing table lookup failed for '%s'", signer_identity);
+        return -1;
+    }
+    if (lookup_rc == 1 && sl->signing_value[0] != '\0') {
+        int pemfd = validate_pem_permissions(sl->signing_value);
+        if (pemfd < 0) {
+            logmsg(LOG_ERR, "signer_lookup_cert: cannot open/validate PEM for '%s'", signer_identity);
+            return -1;
+        }
+        sl->cert = load_pem_cert(pemfd);
+        if (sl->cert == NULL) {
+            logmsg(LOG_ERR, "signer_lookup_cert: certificate parsing failed for '%s'", sl->signing_value);
+            return -1;
+        }
+        sl->resolved = 1;
+        return 1;
+    }
+
+    return 0;
+}
+
+/*
  * Free any early-allocated envfrom resources and release an existing ctxdata
  * when returning an early, non-CONTINUE status.
  */
@@ -136,20 +240,16 @@ static void envfrom_early_cleanup(SMFICTX* ctx, CTXDATA* ctxdata,
  */
 sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
 
-    char           signing_value[4096];
-    int            lookup_rc = 0;
-    int            lookup_needed = 1;
-    CTXDATA*       ctxdata = NULL;
-    const char*    daemon_name;
-    int            i;
-    int            auth_rc = 0;
-    char*          auth_identity = NULL;
+    signer_lookup_t lookup;
+    CTXDATA*        ctxdata = NULL;
+    const char*     daemon_name;
+    int             i;
+    int             auth_rc = 0;
+    char*           auth_identity = NULL;
+    int             setup_ready = 0;
+    int             deny_reason = 0;
 
-    char*          redis_pem = NULL;
-    size_t         redis_pem_len = 0;
-    char*          redis_chain = NULL;
-    size_t         redis_chain_len = 0;
-    int            redis_found = 0;
+    signer_lookup_init(&lookup);
 
     char sym_daemon_name[] = "{daemon_name}";
     if ((daemon_name = smfi_getsymval(ctx, sym_daemon_name)) == NULL) {
@@ -164,64 +264,83 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
      */
     logmsg(LOG_DEBUG, "MAIL FROM: '%s' (via %s)", argv[0], daemon_name);
 
-    if (dict_reload(&dict_signingtable) < 0) {
-        logmsg(LOG_ERR, "callback_envfrom: signing table reload failed");
-        return SMFIS_TEMPFAIL;
+    auth_identity = get_auth_identity(ctx);
+
+    if (auth_signing_has_explicit_backend()) {
+        /*
+         * Explicit auth tables are authoritative.  Authorize first, then
+         * resolve the signing material only for authorized signers.
+         */
+        auth_rc = auth_signing_authorized(auth_identity, argv[0], NULL);
+        if (auth_rc == -1) {
+            logmsg(LOG_ERR, "callback_envfrom: auth_signing_authorized() failed");
+            free(auth_identity);
+            signer_lookup_cleanup(&lookup);
+            return SMFIS_TEMPFAIL;
+        }
+        if (auth_rc == 1) {
+            int rc = signer_lookup_cert(argv[0], &lookup);
+            if (rc == -1) {
+                logmsg(LOG_ERR, "callback_envfrom: signer lookup failed for '%s'", argv[0]);
+                free(auth_identity);
+                signer_lookup_cleanup(&lookup);
+                return SMFIS_TEMPFAIL;
+            }
+            if (rc == 1) {
+                setup_ready = 1;
+            } else {
+                deny_reason = 1;
+                auth_rc = 0;
+            }
+        } else {
+            deny_reason = 0;
+        }
+    } else {
+        /*
+         * Certificate-CN fallback: resolve the certificate before the private
+         * key is loaded, then authorize against the certificate subject CN.
+         */
+        int rc = signer_lookup_cert(argv[0], &lookup);
+        if (rc == -1) {
+            logmsg(LOG_ERR, "callback_envfrom: signer lookup failed for '%s'", argv[0]);
+            free(auth_identity);
+            signer_lookup_cleanup(&lookup);
+            return SMFIS_TEMPFAIL;
+        }
+        if (rc == 1) {
+            auth_rc = auth_signing_authorized(auth_identity, argv[0], lookup.cert);
+            if (auth_rc == -1) {
+                logmsg(LOG_ERR, "callback_envfrom: certificate authorization failed for '%s'", argv[0]);
+                free(auth_identity);
+                signer_lookup_cleanup(&lookup);
+                return SMFIS_TEMPFAIL;
+            }
+            if (auth_rc == 1) {
+                setup_ready = 1;
+            } else {
+                deny_reason = 0;
+                signer_lookup_cleanup(&lookup);
+                signer_lookup_init(&lookup);
+            }
+        } else {
+            deny_reason = 1;
+            auth_rc = 0;
+        }
     }
 
-    /*
-     * Every signing request must be bound to a trustworthy authenticated
-     * principal.  Absence of an authorization table is not a blank check
-     * (CWE-862).
-     */
-    auth_identity = get_auth_identity(ctx);
-    auth_rc = auth_signing_authorized(auth_identity, argv[0]);
-    if (auth_rc == -1) {
-        logmsg(LOG_ERR, "callback_envfrom: auth_signing_authorized() failed");
-        free(auth_identity);
-        return SMFIS_TEMPFAIL;
-    }
-    if (auth_rc == 0) {
+    if (!setup_ready) {
         if (!opt_signerfromheader) {
-            logmsg(LOG_INFO, "callback_envfrom: authenticated identity '%s' not authorized for signer '%s'; mail will not be signed",
-                   auth_identity ? auth_identity : "(none)", argv[0]);
+            if (deny_reason == 0) {
+                logmsg(LOG_INFO, "callback_envfrom: authenticated identity '%s' not authorized for signer '%s'; mail will not be signed",
+                       auth_identity ? auth_identity : "(none)", argv[0]);
+            } else {
+                logmsg(LOG_INFO, "no signingdata for '%s'; mail will not be signed", argv[0]);
+            }
             free(auth_identity);
+            signer_lookup_cleanup(&lookup);
             return SMFIS_CONTINUE;
         }
-        /* wait for an X-Signer header; do not fetch signing material now */
-        lookup_needed = 0;
-    }
-
-    if (lookup_needed) {
-        if (opt_redis_uri != NULL && *opt_redis_uri != '\0') {
-            i = redis_lookup_cert(argv[0], &redis_pem, &redis_pem_len,
-                                  &redis_chain, &redis_chain_len);
-            if (i == -1) {
-                free(auth_identity);
-                return SMFIS_TEMPFAIL;
-            }
-            if (i == 0)
-                redis_found = 1;
-        }
-
-        if (!redis_found) {
-            lookup_rc = dict_lookup(&dict_signingtable, argv[0],
-                                    signing_value, sizeof(signing_value));
-            if (lookup_rc == -1) {
-                logmsg(LOG_ERR, "callback_envfrom: signing table lookup failed for '%s'", argv[0]);
-                free(auth_identity);
-                return SMFIS_TEMPFAIL;
-            }
-            if (lookup_rc == 0) {
-                if (opt_signerfromheader) {
-                    logmsg(LOG_DEBUG, "no cert for envsender, will look for '%s'", HEADERNAME_SIGNER);
-                } else {
-                    logmsg(LOG_INFO, "no signingdata for '%s'; mail will not be signed", argv[0]);
-                    free(auth_identity);
-                    return SMFIS_CONTINUE;
-                }
-            }
-        }
+        logmsg(LOG_DEBUG, "callback_envfrom: no usable/authorized envelope signer, will look for '%s'", HEADERNAME_SIGNER);
     }
 
     /*
@@ -234,41 +353,40 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
     } else {
         if ((ctxdata = ctxdata_create()) == NULL) {
             free(auth_identity);
-            free(redis_pem);
-            free(redis_chain);
+            signer_lookup_cleanup(&lookup);
             return SMFIS_TEMPFAIL;
         }
     }
 
     ctxdata->auth_identity = auth_identity;
 
-    if ((redis_found || (lookup_rc == 1 && signing_value[0] != '\0')) && auth_rc == 1) {
-        if (redis_found) {
+    if (setup_ready) {
+        if (lookup.from_redis) {
             logmsg(LOG_INFO, "signingdata from redis for envsender '%s'", argv[0]);
-            if ((i = ctxdata_setup_from_redis(ctxdata, argv[0], redis_pem, redis_pem_len,
-                                              redis_chain, redis_chain_len,
+            if ((i = ctxdata_setup_from_redis(ctxdata, argv[0], lookup.redis_pem, lookup.redis_pem_len,
+                                              lookup.redis_chain, lookup.redis_chain_len,
                                               opt_redis_passphrase)) != 0) {
                 logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup_from_redis() failed: rc=%i, envsender='%s'", i, argv[0]);
-                envfrom_early_cleanup(ctx, ctxdata, NULL, redis_pem, redis_chain);
+                envfrom_early_cleanup(ctx, ctxdata, NULL, NULL, NULL);
+                lookup.redis_pem = NULL;
+                lookup.redis_chain = NULL;
+                signer_lookup_cleanup(&lookup);
                 return SMFIS_TEMPFAIL;
             }
+            lookup.redis_pem = NULL;
+            lookup.redis_chain = NULL;
         } else {
             logmsg(LOG_INFO, "signingdata from envsender '%s'", argv[0]);
-            if ((i = ctxdata_setup(ctxdata, signing_value)) != 0) {
-                logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup() failed: rc=%i, envsender='%s', file=%s", i, argv[0], signing_value);
-                envfrom_early_cleanup(ctx, ctxdata, NULL, redis_pem, redis_chain);
+            if ((i = ctxdata_setup(ctxdata, lookup.signing_value)) != 0) {
+                logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup() failed: rc=%i, envsender='%s', file=%s", i, argv[0], lookup.signing_value);
+                envfrom_early_cleanup(ctx, ctxdata, NULL, NULL, NULL);
+                signer_lookup_cleanup(&lookup);
                 return SMFIS_TEMPFAIL;
             }
         }
+        signer_lookup_cleanup(&lookup);
     } else {
-        /*
-         * Either auth failed for the envelope signer or no signing material
-         * was found.  Free any Redis buffers here; they are not needed.
-         */
-        free(redis_pem);
-        redis_pem = NULL;
-        free(redis_chain);
-        redis_chain = NULL;
+        signer_lookup_cleanup(&lookup);
     }
 
     /*
@@ -276,7 +394,8 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
      */
     if (smfi_setpriv(ctx, ctxdata) != MI_SUCCESS) {
         logmsg(LOG_ERR, "error: callback_envfrom: setpriv failed, envsender='%s'", argv[0]);
-        envfrom_early_cleanup(ctx, ctxdata, NULL, redis_pem, redis_chain);
+        envfrom_early_cleanup(ctx, ctxdata, NULL, NULL, NULL);
+        signer_lookup_cleanup(&lookup);
         return SMFIS_TEMPFAIL;
     }
 
@@ -434,15 +553,12 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
 
     if (strcasecmp(headerf, HEADERNAME_SIGNER) == 0) {
 
-        char           signing_value[4096];
-        int            lookup_rc = 0;
-        int            auth_rc;
-        char*          redis_pem = NULL;
-        size_t         redis_pem_len = 0;
-        char*          redis_chain = NULL;
-        size_t         redis_chain_len = 0;
-        int            redis_found = 0;
-        int            i;
+        signer_lookup_t lookup;
+        int             auth_rc = 0;
+        int             setup_ready = 0;
+        int             i;
+
+        signer_lookup_init(&lookup);
 
         /*
          * Process at most one X-Signer header.  Duplicates are untrusted
@@ -465,36 +581,12 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
          * unusable X-Signer must not suppress an already-authorized envelope
          * signer.
          */
-        auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv);
-        if (auth_rc == -1) {
-            logmsg(LOG_ERR, "%s: callback_header: X-Signer authorization check failed for '%s'",
-                   ctxdata->queueid, headerv);
-            ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-            if (ctxdata->cert != NULL)
-                return SMFIS_CONTINUE;
-            ctxdata_cleanup(ctxdata);
-            ctxdata_free(ctxdata);
-            (void) smfi_setpriv(ctx, NULL);
-            return SMFIS_TEMPFAIL;
-        }
-        if (auth_rc == 0) {
-            logmsg(LOG_NOTICE, "%s: X-Signer '%s' not authorized for authenticated identity '%s'; keeping any authorized envelope signer",
-                   ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
-            ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-            free(redis_pem);
-            free(redis_chain);
-            return SMFIS_CONTINUE;
-        }
-
-        if (opt_redis_uri != NULL && *opt_redis_uri != '\0') {
-            i = redis_lookup_cert(headerv, &redis_pem, &redis_pem_len,
-                                  &redis_chain, &redis_chain_len);
-            if (i == -1) {
-                logmsg(LOG_ERR, "%s: callback_header: Redis lookup failed for X-Signer '%s'",
+        if (auth_signing_has_explicit_backend()) {
+            auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv, NULL);
+            if (auth_rc == -1) {
+                logmsg(LOG_ERR, "%s: callback_header: X-Signer authorization check failed for '%s'",
                        ctxdata->queueid, headerv);
                 ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                free(redis_pem);
-                free(redis_chain);
                 if (ctxdata->cert != NULL)
                     return SMFIS_CONTINUE;
                 ctxdata_cleanup(ctxdata);
@@ -502,72 +594,99 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
                 (void) smfi_setpriv(ctx, NULL);
                 return SMFIS_TEMPFAIL;
             }
-            if (i == 0)
-                redis_found = 1;
-        }
-
-        if (!redis_found) {
-            if (dict_reload(&dict_signingtable) < 0) {
-                logmsg(LOG_ERR, "%s: callback_header: signing table reload failed", ctxdata->queueid);
+            if (auth_rc == 0) {
+                logmsg(LOG_NOTICE, "%s: X-Signer '%s' not authorized for authenticated identity '%s'; keeping any authorized envelope signer",
+                       ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
                 ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                free(redis_pem);
-                free(redis_chain);
-                if (ctxdata->cert != NULL)
-                    return SMFIS_CONTINUE;
-                ctxdata_cleanup(ctxdata);
-                ctxdata_free(ctxdata);
-                (void) smfi_setpriv(ctx, NULL);
-                return SMFIS_TEMPFAIL;
+                return SMFIS_CONTINUE;
             }
 
-            lookup_rc = dict_lookup(&dict_signingtable, headerv,
-                                    signing_value, sizeof(signing_value));
-            if (lookup_rc == -1) {
-                logmsg(LOG_ERR, "%s: callback_header: signing table lookup failed for '%s'", ctxdata->queueid, headerv);
-                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                free(redis_pem);
-                free(redis_chain);
-                if (ctxdata->cert != NULL)
-                    return SMFIS_CONTINUE;
-                ctxdata_cleanup(ctxdata);
-                ctxdata_free(ctxdata);
-                (void) smfi_setpriv(ctx, NULL);
-                return SMFIS_TEMPFAIL;
-            }
-            if (lookup_rc == 0) {
+            if (signer_lookup_cert(headerv, &lookup) != 1) {
                 logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; keeping any authorized envelope signer", ctxdata->queueid, headerv);
                 ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                free(redis_pem);
-                free(redis_chain);
+                signer_lookup_cleanup(&lookup);
+                return SMFIS_CONTINUE;
+            }
+            setup_ready = 1;
+        } else {
+            /* Certificate-CN fallback: resolve cert before private key. */
+            int rc = signer_lookup_cert(headerv, &lookup);
+            if (rc == -1) {
+                logmsg(LOG_ERR, "%s: callback_header: signer lookup failed for X-Signer '%s'",
+                       ctxdata->queueid, headerv);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                signer_lookup_cleanup(&lookup);
+                if (ctxdata->cert != NULL)
+                    return SMFIS_CONTINUE;
+                ctxdata_cleanup(ctxdata);
+                ctxdata_free(ctxdata);
+                (void) smfi_setpriv(ctx, NULL);
+                return SMFIS_TEMPFAIL;
+            }
+            if (rc == 1) {
+                auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv, lookup.cert);
+                if (auth_rc == -1) {
+                    logmsg(LOG_ERR, "%s: callback_header: X-Signer certificate authorization failed for '%s'",
+                           ctxdata->queueid, headerv);
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    signer_lookup_cleanup(&lookup);
+                    if (ctxdata->cert != NULL)
+                        return SMFIS_CONTINUE;
+                    ctxdata_cleanup(ctxdata);
+                    ctxdata_free(ctxdata);
+                    (void) smfi_setpriv(ctx, NULL);
+                    return SMFIS_TEMPFAIL;
+                }
+                if (auth_rc == 0) {
+                    logmsg(LOG_NOTICE, "%s: X-Signer '%s' certificate CN does not match authenticated identity '%s'; keeping any authorized envelope signer",
+                           ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    signer_lookup_cleanup(&lookup);
+                    return SMFIS_CONTINUE;
+                }
+                setup_ready = 1;
+            } else {
+                logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; keeping any authorized envelope signer", ctxdata->queueid, headerv);
+                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                signer_lookup_cleanup(&lookup);
                 return SMFIS_CONTINUE;
             }
         }
 
-        if (redis_found) {
-            logmsg(LOG_INFO, "signingdata from redis for header signer '%s'", headerv);
-            if ((i = ctxdata_setup_from_redis(ctxdata, headerv, redis_pem, redis_pem_len,
-                                              redis_chain, redis_chain_len,
-                                              opt_redis_passphrase)) != 0) {
-                logmsg(LOG_ERR, "callback_header: ctxdata_setup_from_redis() failed: rc=%i, headerf=%s, headerv=%s", i, headerf, headerv);
-                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                if (ctxdata->cert != NULL)
-                    return SMFIS_CONTINUE;
-                ctxdata_cleanup(ctxdata);
-                ctxdata_free(ctxdata);
-                (void) smfi_setpriv(ctx, NULL);
-                return SMFIS_TEMPFAIL;
+        if (setup_ready) {
+            if (lookup.from_redis) {
+                logmsg(LOG_INFO, "signingdata from redis for header signer '%s'", headerv);
+                if ((i = ctxdata_setup_from_redis(ctxdata, headerv, lookup.redis_pem, lookup.redis_pem_len,
+                                                  lookup.redis_chain, lookup.redis_chain_len,
+                                                  opt_redis_passphrase)) != 0) {
+                    logmsg(LOG_ERR, "callback_header: ctxdata_setup_from_redis() failed: rc=%i, headerf=%s, headerv=%s", i, headerf, headerv);
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    lookup.redis_pem = NULL;
+                    lookup.redis_chain = NULL;
+                    signer_lookup_cleanup(&lookup);
+                    if (ctxdata->cert != NULL)
+                        return SMFIS_CONTINUE;
+                    ctxdata_cleanup(ctxdata);
+                    ctxdata_free(ctxdata);
+                    (void) smfi_setpriv(ctx, NULL);
+                    return SMFIS_TEMPFAIL;
+                }
+                lookup.redis_pem = NULL;
+                lookup.redis_chain = NULL;
+            } else {
+                if ((i = ctxdata_setup(ctxdata, lookup.signing_value)) != 0) {
+                    logmsg(LOG_ERR, "callback_header: ctxdata_setup() failed: rc=%i, headerf=%s, headerv=%s, file=%s", i, headerf, headerv, lookup.signing_value);
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    signer_lookup_cleanup(&lookup);
+                    if (ctxdata->cert != NULL)
+                        return SMFIS_CONTINUE;
+                    ctxdata_cleanup(ctxdata);
+                    ctxdata_free(ctxdata);
+                    (void) smfi_setpriv(ctx, NULL);
+                    return SMFIS_TEMPFAIL;
+                }
             }
-        } else {
-            if ((i = ctxdata_setup(ctxdata, signing_value)) != 0) {
-                logmsg(LOG_ERR, "callback_header: ctxdata_setup() failed: rc=%i, headerf=%s, headerv=%s, file=%s", i, headerf, headerv, signing_value);
-                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                if (ctxdata->cert != NULL)
-                    return SMFIS_CONTINUE;
-                ctxdata_cleanup(ctxdata);
-                ctxdata_free(ctxdata);
-                (void) smfi_setpriv(ctx, NULL);
-                return SMFIS_TEMPFAIL;
-            }
+            signer_lookup_cleanup(&lookup);
         }
 
         /*

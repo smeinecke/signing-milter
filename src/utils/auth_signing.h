@@ -21,15 +21,36 @@ extern int opt_redis_auth_signing_table;
 extern struct DICT dict_auth_signingtable;
 
 /*
+ * Maximum length of a Common Name extracted for certificate fallback
+ * authorization (plus one byte for the terminating NUL).
+ */
+#define AUTH_CERT_CN_MAX_LEN 256
+
+/*
+ * Return 1 if an explicit auth-signing backend (CDB or Redis) is configured.
+ */
+extern int auth_signing_has_explicit_backend(void);
+
+/*
  * Check whether auth_identity (opaque SASL principal) is authorized to use
- * signer_identity (RFC 5321 address).  The signer identity is normalized
- * internally; auth_identity is matched case-sensitively.
+ * signer_identity (RFC 5321 address).
+ *
+ * If an explicit auth-signing backend is configured (-a or -R), it is
+ * authoritative and signer_cert is ignored.
+ *
+ * If no explicit backend is configured, certificate-CN fallback authorization
+ * is used: signer_cert must be a valid certificate with exactly one subject
+ * Common Name that matches auth_identity exactly (case-sensitive, opaque byte
+ * comparison).  A NULL or unusable certificate results in denial.
+ *
+ * The signer identity is normalized internally; auth_identity is matched
+ * case-sensitively.
  *
  * Returns:
- *   1  - authorized (or no auth table configured)
+ *   1  - authorized
  *   0  - not authorized
- *  -1  - lookup or normalization error (fails closed)
+ *  -1  - lookup, parsing, or normalization error (fails closed)
  */
-extern int auth_signing_authorized(const char* auth_identity, const char* signer_identity);
+extern int auth_signing_authorized(const char* auth_identity, const char* signer_identity, const X509* signer_cert);
 
 #endif
