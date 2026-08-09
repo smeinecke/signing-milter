@@ -11,6 +11,20 @@ Type=simple
 UMask=0077
 PrivateTmp=yes
 ProtectHome=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# If the milter socket is not under /tmp, add its directory here:
+# ReadWritePaths=/run/signing-milter /var/spool/postfix/signing-milter
 
 [Install]
 WantedBy=multi-user.target

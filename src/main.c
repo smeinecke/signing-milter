@@ -743,7 +743,8 @@ int main(int argc, char** argv) {
         socket_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
         socket_mode_str = "0660";
         if ((opt_clientgroup != NULL) && strcmp(opt_clientgroup, ":relax") == 0) {
-            logmsg(LOG_WARNING, "clientgroup :relax selected: the milter socket will be world-writable (0666)");
+            logmsg(LOG_ERR, "clientgroup :relax selected: the milter socket will be world-writable (0666). "
+                   "This is insecure and should only be used for local testing.");
             socket_mode = socket_mode | S_IROTH | S_IWOTH;
             socket_mode_str = "0666";
         }

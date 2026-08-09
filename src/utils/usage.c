@@ -12,7 +12,9 @@ void usage(void) {
     printf("                  default: none\n");
     printf("  -h              show help and exit\n");
     printf("  -v              show version and exit\n");
-    printf("  -c clientgroup  make a local socket accessible for clientgroup\n");
+    printf("  -c clientgroup  make a local socket accessible for clientgroup;\n");
+    printf("                  use the magic value ':relax' to create a\n");
+    printf("                  world-writable socket (insecure, test-only)\n");
     printf("                  default: none\n");
     printf("  -d loglevel     set loglevel\n");
     printf("                  default: %i\n", opt_loglevel);
