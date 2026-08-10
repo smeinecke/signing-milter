@@ -347,8 +347,6 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
      * Prepare the private data structure
      */
     if ((ctxdata = (CTXDATA*) smfi_getpriv(ctx)) != NULL) {
-        /* actually LOG_INFO / not important, but I want to see this in the log once */
-        logmsg(LOG_WARNING, "callback_envfrom: REUSED CONNECTION !!!!");
         ctxdata_cleanup(ctxdata);
     } else {
         if ((ctxdata = ctxdata_create()) == NULL) {
@@ -769,33 +767,6 @@ sfsistat callback_eoh(SMFICTX* ctx) {
         logmsg(LOG_WARNING, "%s: callback_eoh: no 'MIME-Version' header but 'Content-*' header found. Treating as MIME and adding default MIME-Version", ctxdata->queueid);
 
         ctxdata->mailflags |= MF_TYPE_MIME | MF_MIME_VERSION_DEFAULT;
-    }
-
-    /*
-     * only a MIME-Version header present, no Content-* header
-     * https://tools.ietf.org/html/rfc2045#section-5.2 mention an implicit default
-     */
-    if ( (ctxdata->headerchain == NULL) && ((ctxdata->mailflags & MF_TYPE_MIME) != 0) ) {
-
-        NODE* n;
-        const char* headerf = "Content-Type";
-        const char* headerv = "text/plain; charset=\"us-ascii\"";
-
-        logmsg(LOG_WARNING, "%s: malformed Content: 'MIME-Version' header but no 'Content-*' header found. Please read RFC 2045, Section 5.2. Adding '%s: %s'" , ctxdata->queueid, headerf, headerv);
-
-        if (headerchain_would_exceed(ctxdata, headerf, headerv)) {
-            logmsg(LOG_ERR, "%s: error: callback_eoh: header chain budget exceeded",
-                   ctxdata->queueid);
-            return SMFIS_TEMPFAIL;
-        }
-
-        if ((n = newnode(headerf, headerv, PHASE_PRE_SIGN)) == NULL) {
-            logmsg(LOG_ERR, "error: callback_eoh: alloc new node failed");
-            return SMFIS_TEMPFAIL;
-        }
-        appendnode(&(ctxdata->headerchain), &(ctxdata->headerchain_tail), n);
-        ctxdata->headerchain_count++;
-        ctxdata->headerchain_bytes += sizeof(NODE) + strlen(n->headerf) + 1 + strlen(n->headerv) + 1;
     }
 
     dump_mailflags(ctxdata->mailflags);
