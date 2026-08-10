@@ -1014,14 +1014,14 @@ static int redis_validate_unix_socket_peer(redisContext* c) {
         return -1;
     }
 
-    if (fstat(c->fd, &st) < 0) {
-        logmsg(LOG_ERR, "redis: cannot stat connected Unix socket: %s",
-               strerror(errno));
+    if (stat(g_uri.unix_socket, &st) < 0) {
+        logmsg(LOG_ERR, "redis: cannot stat Unix socket %s: %s",
+               g_uri.unix_socket, strerror(errno));
         return -1;
     }
 
     if (!S_ISSOCK(st.st_mode)) {
-        logmsg(LOG_ERR, "redis: connected file descriptor is not a socket");
+        logmsg(LOG_ERR, "redis: %s is not a Unix socket", g_uri.unix_socket);
         return -1;
     }
 
