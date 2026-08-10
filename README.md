@@ -294,7 +294,8 @@ smtpd_milters = unix:signing-milter/signing-milter.sock
 > **Warning:** Do not attach `signing-milter` globally to an Internet-facing
 > MX listening on port 25 unless you have another trusted mechanism that
 > guarantees the sender is authorized for the signing identity.  When an
-> `auth-signing-table` is configured (required for authenticated-sender signing),
+> `auth-signing-table` is configured (recommended for authenticated-sender signing;
+> otherwise certificate-CN fallback is used),
 > use the milter only on the authenticated `submission` service, and combine it
 > with Postfix `smtpd_sender_login_maps` /
 > `reject_authenticated_sender_login_mismatch`.

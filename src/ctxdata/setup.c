@@ -4,7 +4,19 @@
 
 int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename) {
 
-    int            pemfd = -1;
+    int pemfd;
+
+    assert(ctxdata != NULL);
+    assert(pemfilename != NULL);
+
+    if ((pemfd = validate_pem_permissions(pemfilename)) < 0)
+        return(1);
+
+    return ctxdata_setup_from_fd(ctxdata, pemfilename, pemfd);
+}
+
+int ctxdata_setup_from_fd(CTXDATA* ctxdata, const char* pemfilename, int pemfd) {
+
     int            chainfd = -1;
     char*          chainfilename = NULL;
     const char*    suffix;
@@ -17,29 +29,33 @@ int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename) {
     STACK_OF(X509)* chain = NULL;
     char*          pemcopy = NULL;
     unsigned char* buffer = NULL;
-    int            rc;
 
     assert(ctxdata != NULL);
     assert(pemfilename != NULL);
-
-    if ((pemfd = validate_pem_permissions(pemfilename)) < 0)
-        return(1);
+    assert(pemfd >= 0);
 
     if ((pemcopy = strdup(pemfilename)) == NULL) {
-        logmsg(LOG_ERR, "error: ctxdata_setup: malloc for ctxdata.pemfilename failed: %m", strerror(errno));
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_fd: malloc for ctxdata.pemfilename failed: %m", strerror(errno));
         close(pemfd);
         return(2);
     }
 
+    if (lseek(pemfd, 0, SEEK_SET) < 0) {
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_fd: lseek on %s failed: %m", pemcopy, strerror(errno));
+        close(pemfd);
+        free(pemcopy);
+        return(4);
+    }
+
     if ((cert = load_pem_cert(pemfd)) == NULL) {
-        logmsg(LOG_ERR, "error: ctxdata_setup: loading certificate %s failed", pemcopy);
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_fd: loading certificate %s failed", pemcopy);
         close(pemfd);
         free(pemcopy);
         return(3);
     }
 
     if (lseek(pemfd, 0, SEEK_SET) < 0) {
-        logmsg(LOG_ERR, "error: ctxdata_setup: lseek on %s failed: %m", pemcopy, strerror(errno));
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_fd: lseek on %s failed: %m", pemcopy, strerror(errno));
         close(pemfd);
         X509_free(cert);
         free(pemcopy);
@@ -47,18 +63,27 @@ int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename) {
     }
 
     if ((key = load_pem_key(pemfd, NULL)) == NULL) {
-        logmsg(LOG_ERR, "error: ctxdata_setup: loading key %s failed", pemcopy);
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_fd: loading key %s failed", pemcopy);
         close(pemfd);
         X509_free(cert);
         free(pemcopy);
         return(4);
     }
 
+    if (X509_check_private_key(cert, key) == 0) {
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_fd: certificate and private key in %s do not match", pemcopy);
+        close(pemfd);
+        X509_free(cert);
+        EVP_PKEY_free(key);
+        free(pemcopy);
+        return(7);
+    }
+
     close(pemfd);
     pemfd = -1;
 
     if ((buffer = malloc(MAXHEADERLEN)) == NULL) {
-        logmsg(LOG_ERR, "error: ctxdata_setup: allocation of %i byte (MAXHEADERLEN) for header failed", MAXHEADERLEN);
+        logmsg(LOG_ERR, "error: ctxdata_setup_from_fd: allocation of %i byte (MAXHEADERLEN) for header failed", MAXHEADERLEN);
         X509_free(cert);
         EVP_PKEY_free(key);
         free(pemcopy);
@@ -78,7 +103,7 @@ int ctxdata_setup(CTXDATA* ctxdata, const char* pemfilename) {
         chainfilename_len = prefix_len + 9 + 1;
 
         if ((chainfilename = malloc(chainfilename_len)) == NULL) {
-            logmsg(LOG_ERR, "error: ctxdata_setup: malloc for chainfilename failed: %m", strerror(errno));
+            logmsg(LOG_ERR, "error: ctxdata_setup_from_fd: malloc for chainfilename failed: %m", strerror(errno));
             free(buffer);
             X509_free(cert);
             EVP_PKEY_free(key);

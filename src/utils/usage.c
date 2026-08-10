@@ -7,8 +7,10 @@ void usage(void) {
     printf("Options are:\n");
     printf("  -a authtable    CDB table that maps an authenticated SMTP identity\n");
     printf("                  to the signing identities it is allowed to use.\n");
-    printf("                  Required for authenticated-sender signing; without\n");
-    printf("                  -a or -R no authenticated principal may sign.\n");
+    printf("                  When configured, this table is authoritative for\n");
+    printf("                  authenticated-sender signing.  If neither -a nor -R\n");
+    printf("                  is configured, the milter falls back to certificate-CN\n");
+    printf("                  authorization.\n");
     printf("                  default: none\n");
     printf("  -h              show help and exit\n");
     printf("  -v              show version and exit\n");

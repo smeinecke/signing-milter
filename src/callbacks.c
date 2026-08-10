@@ -1,6 +1,7 @@
 #include "callbacks.h"
 
 #include <limits.h>
+#include <unistd.h>
 
 #include "auth_signing.h"
 
@@ -116,6 +117,7 @@ typedef struct {
     X509* cert;
     int   from_redis;
     int   resolved;
+    int   pemfd;
     char  signing_value[4096];
     char* redis_pem;
     size_t redis_pem_len;
@@ -125,6 +127,7 @@ typedef struct {
 
 static void signer_lookup_init(signer_lookup_t* sl) {
     bzero(sl, sizeof(*sl));
+    sl->pemfd = -1;
 }
 
 static void signer_lookup_cleanup(signer_lookup_t* sl) {
@@ -133,6 +136,10 @@ static void signer_lookup_cleanup(signer_lookup_t* sl) {
     if (sl->cert != NULL) {
         X509_free(sl->cert);
         sl->cert = NULL;
+    }
+    if (sl->pemfd >= 0) {
+        close(sl->pemfd);
+        sl->pemfd = -1;
     }
     if (sl->redis_pem != NULL) {
         OPENSSL_cleanse(sl->redis_pem, sl->redis_pem_len);
@@ -194,12 +201,13 @@ static int signer_lookup_cert(const char* signer_identity, signer_lookup_t* sl) 
         return -1;
     }
     if (lookup_rc == 1 && sl->signing_value[0] != '\0') {
-        int pemfd = validate_pem_permissions(sl->signing_value);
-        if (pemfd < 0) {
+        sl->pemfd = validate_pem_permissions(sl->signing_value);
+        if (sl->pemfd < 0) {
+            sl->pemfd = -1;
             logmsg(LOG_ERR, "signer_lookup_cert: cannot open/validate PEM for '%s'", signer_identity);
             return -1;
         }
-        sl->cert = load_pem_cert(pemfd);
+        sl->cert = load_pem_cert(sl->pemfd);
         if (sl->cert == NULL) {
             logmsg(LOG_ERR, "signer_lookup_cert: certificate parsing failed for '%s'", sl->signing_value);
             return -1;
@@ -375,8 +383,16 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
             lookup.redis_chain = NULL;
         } else {
             logmsg(LOG_INFO, "signingdata from envsender '%s'", argv[0]);
-            if ((i = ctxdata_setup(ctxdata, lookup.signing_value)) != 0) {
-                logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup() failed: rc=%i, envsender='%s', file=%s", i, argv[0], lookup.signing_value);
+            if (lookup.pemfd < 0) {
+                logmsg(LOG_ERR, "callback_envfrom: no open PEM file for envsender='%s', file=%s", argv[0], lookup.signing_value);
+                envfrom_early_cleanup(ctx, ctxdata, NULL, NULL, NULL);
+                signer_lookup_cleanup(&lookup);
+                return SMFIS_TEMPFAIL;
+            }
+            i = ctxdata_setup_from_fd(ctxdata, lookup.signing_value, lookup.pemfd);
+            lookup.pemfd = -1;
+            if (i != 0) {
+                logmsg(LOG_ERR, "callback_envfrom: ctxdata_setup_from_fd() failed: rc=%i, envsender='%s', file=%s", i, argv[0], lookup.signing_value);
                 envfrom_early_cleanup(ctx, ctxdata, NULL, NULL, NULL);
                 signer_lookup_cleanup(&lookup);
                 return SMFIS_TEMPFAIL;
@@ -672,8 +688,21 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
                 lookup.redis_pem = NULL;
                 lookup.redis_chain = NULL;
             } else {
-                if ((i = ctxdata_setup(ctxdata, lookup.signing_value)) != 0) {
-                    logmsg(LOG_ERR, "callback_header: ctxdata_setup() failed: rc=%i, headerf=%s, headerv=%s, file=%s", i, headerf, headerv, lookup.signing_value);
+                if (lookup.pemfd < 0) {
+                    logmsg(LOG_ERR, "callback_header: no open PEM file for headerf=%s, headerv=%s, file=%s", headerf, headerv, lookup.signing_value);
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    signer_lookup_cleanup(&lookup);
+                    if (ctxdata->cert != NULL)
+                        return SMFIS_CONTINUE;
+                    ctxdata_cleanup(ctxdata);
+                    ctxdata_free(ctxdata);
+                    (void) smfi_setpriv(ctx, NULL);
+                    return SMFIS_TEMPFAIL;
+                }
+                i = ctxdata_setup_from_fd(ctxdata, lookup.signing_value, lookup.pemfd);
+                lookup.pemfd = -1;
+                if (i != 0) {
+                    logmsg(LOG_ERR, "callback_header: ctxdata_setup_from_fd() failed: rc=%i, headerf=%s, headerv=%s, file=%s", i, headerf, headerv, lookup.signing_value);
                     ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
                     signer_lookup_cleanup(&lookup);
                     if (ctxdata->cert != NULL)
