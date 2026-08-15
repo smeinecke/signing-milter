@@ -1,19 +1,19 @@
 Package: signing-milter
-Version: 20260807-1~trixie1
+Version: 20260815-2~trixie1
 Architecture: arm64
 Maintainer: Andreas Schulze <debian@andreasschulze.de>
-Installed-Size: 112
+Installed-Size: 184
 Pre-Depends: adduser
-Depends: libc6 (>= 2.34), libcdb1 (>= 0.76), libhiredis1.1.0 (>= 1.2.0), libmilter1.0.1, libssl3t64 (>= 3.0.0), tinycdb
+Depends: libc6 (>= 2.38), libcdb1 (>= 0.76), libhiredis1.1.0 (>= 1.2.0), libmilter1.0.1, libssl3t64 (>= 3.0.0), tinycdb
 Recommends: make
 Homepage: https://signing-milter.org
 Priority: optional
 Section: mail
-Filename: pool/main/s/signing-milter/signing-milter_20260807-1~trixie1_arm64.deb
-Size: 30252
-SHA256: 038695d7a820e9b4e8e4b8cdd6c055c8f299e5330c308e593b7769d045e704bb
-SHA1: 3639c339b10ca7e3c15f8b7d10650d1ca11ce37c
-MD5sum: 305d77b1c31d9783347eae1a719d8d8a
+Filename: pool/main/s/signing-milter/signing-milter_20260815-2~trixie1_arm64.deb
+Size: 47484
+SHA256: 8a9eb684e09f3b5f3513465899d1e52ce327a220365630b5566b9cf04411cdec
+SHA1: 77c8c31b684400dd6c11d6535ba3de4f38270e66
+MD5sum: 83ebb008c4561cde6332a8318208811d
 Description: Sign email via milter protocol
  signing-milter  uses  the  milter  interface, originally distributed as
  part of version 8.11 of sendmail(8), to  provide  signing  service  for

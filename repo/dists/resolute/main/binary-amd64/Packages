@@ -1,19 +1,19 @@
 Package: signing-milter
-Version: 20260807-1~resolute1
+Version: 20260815-2~resolute1
 Architecture: amd64
 Maintainer: Andreas Schulze <debian@andreasschulze.de>
-Installed-Size: 107
+Installed-Size: 151
 Pre-Depends: adduser
 Depends: libc6 (>= 2.38), libcdb1 (>= 0.76), libhiredis1.1.0 (>= 1.2.0), libmilter1.0.1, libssl3t64 (>= 3.0.0), tinycdb
 Recommends: make
 Homepage: https://signing-milter.org
 Priority: optional
 Section: mail
-Filename: pool/main/s/signing-milter/signing-milter_20260807-1~resolute1_amd64.deb
-Size: 29896
-SHA256: e73099a7fdaeda9789898bafadf3a45b1fc8bd712fa461905038e5b706afe693
-SHA1: f9d3f23a7d0077616bf3bee241672ba97162500d
-MD5sum: 9712e03b3d814e1c8798fd9f1b765943
+Filename: pool/main/s/signing-milter/signing-milter_20260815-2~resolute1_amd64.deb
+Size: 47380
+SHA256: 5a6097de715abd08c59770cd8d20ef553dab84083ed5f484bf933cb09a90d9f7
+SHA1: 024a83514d83df3338616e48c578e7ddd634202d
+MD5sum: 65b56c0433f556f4c50a37ff13e5cb31
 Description: Sign email via milter protocol
  signing-milter  uses  the  milter  interface, originally distributed as
  part of version 8.11 of sendmail(8), to  provide  signing  service  for

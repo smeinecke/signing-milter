@@ -1,19 +1,19 @@
 Package: signing-milter
-Version: 20260807-1~noble1
+Version: 20260815-2~noble1
 Architecture: arm64
 Maintainer: Andreas Schulze <debian@andreasschulze.de>
-Installed-Size: 111
+Installed-Size: 183
 Pre-Depends: adduser
-Depends: libc6 (>= 2.34), libcdb1 (>= 0.76), libhiredis1.1.0 (>= 1.2.0), libmilter1.0.1, libssl3t64 (>= 3.0.0), tinycdb
+Depends: libc6 (>= 2.38), libcdb1 (>= 0.76), libhiredis1.1.0 (>= 1.2.0), libmilter1.0.1, libssl3t64 (>= 3.0.0), tinycdb
 Recommends: make
 Homepage: https://signing-milter.org
 Priority: optional
 Section: mail
-Filename: pool/main/s/signing-milter/signing-milter_20260807-1~noble1_arm64.deb
-Size: 29112
-SHA256: 074f76c4f0982b9390fbb5222c1e1ef71231df30313df4d069881b07fd890bb6
-SHA1: a0a549865b7c6b02f15f759a1b3757c5910332a5
-MD5sum: 549d67e2fb3807da3022b6eaad825421
+Filename: pool/main/s/signing-milter/signing-milter_20260815-2~noble1_arm64.deb
+Size: 45552
+SHA256: 65c0fc6a9a3ae55ea040bab7b322c2280b7500ac38ae4f7095db8cc3332bed3c
+SHA1: 3ee6cf4b35be27d45c404a93ba369346e3a2c964
+MD5sum: 8c55f703df0d7017456bb81f48d692c4
 Description: Sign email via milter protocol
  signing-milter  uses  the  milter  interface, originally distributed as
  part of version 8.11 of sendmail(8), to  provide  signing  service  for
