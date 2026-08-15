@@ -1,0 +1,6 @@
+[Unit]
+Description=Hourly statistics logging for signing-milter
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/signing-milter/signing-milter-statistics hourly

@@ -1,6 +1,9 @@
 usr/sbin/signing-milter usr/sbin
 usr/share/signing-milter/run_signing-milter usr/share/signing-milter
+debian/signing-milter-statistics usr/share/signing-milter
+debian/signing-milter-statistics-hourly.service usr/lib/systemd/system
+debian/signing-milter-statistics-hourly.timer usr/lib/systemd/system
+debian/signing-milter-statistics-daily.service usr/lib/systemd/system
+debian/signing-milter-statistics-daily.timer usr/lib/systemd/system
 etc/default/signing-milter etc/default
-etc/cron.daily/signing-milter etc/cron.daily
-etc/cron.hourly/signing-milter etc/cron.hourly
 debian/etc/signing-milter etc/

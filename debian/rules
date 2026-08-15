@@ -27,6 +27,8 @@ include /usr/share/dpkg/buildflags.mk
 
 CMAKE_FLAGS =
 
+CMAKE_FLAGS += -DWITH_CRON=OFF
+
 ifneq (,$(filter pkg.signing-milter.noredis,$(DEB_BUILD_PROFILES)))
     CMAKE_FLAGS += -DWITH_REDIS=OFF
 endif
@@ -46,6 +48,8 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	dh_auto_install --destdir=debian/tmp
+
+override_dh_installcron:
 
 override_dh_installinit:
 

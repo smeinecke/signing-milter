@@ -43,6 +43,16 @@ case "$1" in
 
         chgrp signing-milter /etc/signing-milter/
         chmod 0750 /etc/signing-milter/
+
+        # Migrate old German variable names to the new English ones,
+        # preserving their assigned values.
+        if [ -f /etc/default/signing-milter ] &&
+           grep -q 'STATISTIK_LOGGING' /etc/default/signing-milter; then
+            sed -i \
+                -e 's/DISABLE_HOURLY_STATISTIK_LOGGING/DISABLE_HOURLY_STATISTICS_LOGGING/g' \
+                -e 's/DISABLE_DAILY_STATISTIK_LOGGING/DISABLE_DAILY_STATISTICS_LOGGING/g' \
+                /etc/default/signing-milter
+        fi
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

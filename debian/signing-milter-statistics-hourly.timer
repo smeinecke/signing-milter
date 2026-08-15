@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly statistics logging timer for signing-milter
+
+[Timer]
+OnCalendar=hourly
+Persistent=false
+
+[Install]
+WantedBy=timers.target

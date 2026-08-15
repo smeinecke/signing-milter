@@ -1,3 +1,101 @@
+signing-milter (20260815-1) unstable; urgency=medium
+
+  * Replace cron.daily/hourly statistics scripts with systemd timer units.
+  * Add signing-milter-statistics wrapper and hourly/daily systemd timers.
+  * Migrate old cron conffiles on upgrade using rm_conffile.
+  * Migrate old STATISTIK_LOGGING variables in /etc/default/signing-milter
+    to STATISTICS.
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Sat, 15 Aug 2026 14:03:00 +0200
+
+signing-milter (20260815) unstable; urgency=medium
+
+  * Add optional auth-signing-table to restrict signing identities.
+  * Harden auth-signing-table before release.
+  * Implement certificate-CN fallback authorization.
+  * Fix local PEM fd leak and cert/key race in CN fallback.
+  * Enforce mandatory signer authorization and fail closed without an auth
+    table.
+  * Treat X-Skip-Signing/X-Signer headers as untrusted and do not honor skip
+    requests.
+  * Ensure a rejected or unauthorized X-Signer header does not suppress
+    signing when an authorized envelope signer is already loaded.
+  * Fix X-Signer amplification, memory pinning, smfi_chgheader semantics,
+    Redis Unix-socket peer trust, and case-folding documentation.
+  * Reorder auth checks before private-key lookup.
+  * Add recipient counting for skip-mode modetable.
+  * Fix multipart/signed parsing and semicolon header handling.
+  * Limit Content-* header chain size and append cost.
+  * Fix an integer underflow in headerchain_would_exceed() by building the
+    size calculation sequentially against SIZE_MAX and MAX_HEADER_CHAIN_BYTES.
+  * Backport upstream logging and MIME Content-Type fixes.
+  * Sanitize every log line: escape control characters and non-printable bytes
+    before syslog/stdout output, preventing log injection.
+  * Escalate the :relax socket-mode warning to LOG_ERR and document it as
+    insecure/test-only.
+  * Remove shared dict_lookup() result buffer and return errors instead of
+    exit().
+  * Make keep files use the configured directory with O_EXCL/O_NOFOLLOW/
+    O_CLOEXEC.
+  * Make dict reloads transactional and callbacks fail closed on reload
+    errors.
+  * Harden setgroups EPERM handling.
+  * Restrict milter network sockets to loopback; Unix-domain sockets remain
+    the default trust boundary.
+  * Require explicit opt-in for INET milter sockets and restrict them to
+    loopback addresses.
+  * Harden Unix socket creation by resolving paths, requiring absolute paths,
+    and validating parent directories to eliminate TOCTOU races.
+  * Validate and open the Unix-socket parent directory before
+    smfi_opensocket performs privileged pathname operations.
+  * Reject a socket directory owned or group-writable by an untrusted
+    identity when starting as root.
+  * Add systemd sandboxing directives (NoNewPrivileges, memory/namespace/
+    realtime restrictions, syscall architecture filtering, address-family
+    limits, UMask/PrivateTmp/ProtectHome).
+  * Add rediss:// (Redis over TLS) support.
+  * Implement real Redis TLS hostname verification and safety fixes.
+  * Harden Redis TLS: require TLS 1.2+, support IPv6, reject plaintext and
+    verify=none options, and fix TLS test startup in CI/Docker.
+  * Check Redis AUTH and SELECT replies are REDIS_REPLY_STATUS "OK" before
+    treating the connection as authenticated or selected.
+  * Add strict redis_parse_number() for port, database and unix-socket db=
+    parsing; reject trailing garbage, out-of-range and negative values.
+  * Fix Redis Unix-socket peer check to stat the socket path, not the client
+    fd.
+  * Add per-context hiredis function table copies for Redis guards.
+  * Fix Redis guard teardown to avoid use-after-free and recursion.
+  * Bound Redis I/O and reply allocation by wrapping hiredis read and
+    createString functions and limiting reader buffer, bulk, and array sizes.
+  * Add a per-command cumulative Redis reply-wire budget (8 MiB) and
+    shape-aware reply guards (redis_guarded_command) for HMGET/HSTRLEN/
+    SISMEMBER/AUTH/SELECT.
+  * Harden Redis: size limits for PEM/chain, HSTRLEN-before-fetch, NUL
+    handling, and explicit TLS hostname verification.
+  * Bound message, Redis PEM, and signed-output sizes and add INT_MAX guards.
+  * Move Redis credentials out of argv/URIs: support password and credentials
+    files, reject passwords embedded in rediss:// URIs, and scrub secret
+    memory before freeing.
+  * Redact Redis URI from process arguments after parsing.
+  * Reject embedded NUL bytes in Redis credential files and zero secret
+    buffers on post-read error paths.
+  * Harden the -W Redis passphrase file with read_secret_file(): require a
+    regular file owned by root or the milter user, no symlinks, no world or
+    group read/write, and no embedded NULs; OPENSSL_cleanse in-memory copy.
+  * Harden Redis SSL ownership: remove SSL_free() from post-handshake
+    verification failure paths after redisInitiateSSL().
+  * Fix Redis reply leak and overlong CDB token.
+  * Use pthread return values (not errno) when reporting pthread_key_create()
+    / pthread_setspecific() failures.
+  * Update README, man page, usage, and documentation for auth-signing table,
+    rediss://, Redis credentials, socket directory, and security defaults.
+  * Fix Redis end-to-end test: use Unix socket and auth-signing.
+  * Fix Postfix integration test for mandatory auth-signing.
+  * Add and update unit and integration tests for malformed Redis port/db,
+    Redis AUTH/SELECT rejection, TLS, and signer authorization.
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Sat, 15 Aug 2026 03:33:00 +0200
+
 signing-milter (20260807-1) unstable; urgency=medium
 
   * Fix statistics logging: use SIGALRM instead of SIGHUP, so cron jobs no
