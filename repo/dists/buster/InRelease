@@ -2,44 +2,44 @@
 Hash: SHA512
 
 Codename: buster
-Date: Sat, 15 Aug 2026 12:47:45 UTC
+Date: Sat, 15 Aug 2026 13:16:31 UTC
 Architectures: amd64 arm64
 Components: main
 Description: smeinecke/signing-milter
 MD5Sum:
- 1a7e002e7d32b984bf0bb563f23a21b0 818 main/binary-amd64/Packages
- cadaed6a8428c2756029395c36854d3b 532 main/binary-amd64/Packages.gz
+ 092a733285272d1ebe5b6154329fdf8a 818 main/binary-amd64/Packages
+ 2450cabc717b62baa9e30e70569b1a82 532 main/binary-amd64/Packages.gz
  53c75bd6fcaa598a1555a27baec99189 74 main/binary-amd64/Release
- 7f299197fbb9505383e74fc4dc74e761 818 main/binary-arm64/Packages
- 471faaf477144957823b0e02119ed1ee 532 main/binary-arm64/Packages.gz
+ 5da574b39b77252622cc388d2e8b7595 818 main/binary-arm64/Packages
+ e9612c4c9c1c3a66886b589107178993 534 main/binary-arm64/Packages.gz
  bb403eb7cb62dd8c4145d4e9e0a818bf 74 main/binary-arm64/Release
 SHA1:
- d2d2e2827f39b51d501c7d95e32afb9c6e08337a 818 main/binary-amd64/Packages
- 38d4503aafecb077ba17ce76f47a06194d2f3c28 532 main/binary-amd64/Packages.gz
+ 2017c9b428f69b138753ae003f964f03f95df1b6 818 main/binary-amd64/Packages
+ eea3307a583d3f2b27028e7571bb0f425ca8457b 532 main/binary-amd64/Packages.gz
  8c9e6bb96cb420c4decf5f08598357158f2ba9a6 74 main/binary-amd64/Release
- 5972b87cd9acac576c67d540e8e09c667d83104d 818 main/binary-arm64/Packages
- ec7e86b928f5f39373b49eb849aad687d2a75c11 532 main/binary-arm64/Packages.gz
+ ca3162c6733350fad30a57f0e6bb4e4346ae9a1e 818 main/binary-arm64/Packages
+ aedab44d5baad3ba79f21cdd505eef5cd753c193 534 main/binary-arm64/Packages.gz
  d875f2c30a33891ca530fb3211c81c603a5022ec 74 main/binary-arm64/Release
 SHA256:
- 25db1420922df5b09d680a0d0e31ae6676d511dd7024bd265fddadf013700109 818 main/binary-amd64/Packages
- b92109dbb399577e97c4c866e4dd090e71b6cf708affd5c40fa88798926ae73f 532 main/binary-amd64/Packages.gz
+ 2ccfe368c11b40452c55633e103ef7a89fcce748f4b6746e5af59f1f6fd662b4 818 main/binary-amd64/Packages
+ 91f52f00104007964c704fc50fb0aa1f191d8336fe654f92633e9631a63fdacc 532 main/binary-amd64/Packages.gz
  63b7757a5a7a97ae95a930c83335cd6345d1c7eab6f3b83a5648e3794b75b589 74 main/binary-amd64/Release
- 63cbc88690d3c9d5f228d214c14659775e80da76bb796d42f0e92c4bab5ba2d2 818 main/binary-arm64/Packages
- e11e92eff5477ff67dd5436b73d577061197704d2e250c96a0a1a9fc505a4ed8 532 main/binary-arm64/Packages.gz
+ 51d9225a30c9dcc4de53e222938707f776c87764ab954eb2302aa6a8f6f20a78 818 main/binary-arm64/Packages
+ 9a26a656b140d577efe319a694de1b53b567f26135a18fde3925a23931bb301a 534 main/binary-arm64/Packages.gz
  261d40b67ca775fcc2f05f72ad70f44c32988ded8a464923121e3db6fc97e13f 74 main/binary-arm64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmqAX/EACgkQLfCqaigF
-WClRtA//TI6YxCvXxVWn98i1gkHUfKqideqoEQOBGTYYbTJBWdye+FGcjQNbE9jt
-bNNL05FYgrhFnksPR6mt1OYBMRrpBpSj7PleumgB5HDQO64urPsg8Z6eYK4Sr7ui
-fFHOE3pw3ZCMUO10C/IqXTqU8FGMC/nIcGdCgEy7HCGsCD60DA5xKH0CxKSCf8k6
-1taWcFdTf3WtIOMt4UzYB093EL9Az/e1c5w82yDHlcrTSKP+J7WpKI/GIqIZADUu
-/2jxJXSOqR+Ii+y6sv+O2ms34r5udsMrteB5Q33WMB+b4jNfOLhvuLc3y1yQu3YL
-SUyw2TRbCWKin0/hjv119BBLaqV4lTErFEmg25inxomI3zYRpsE0EoU/Zbj5E2vP
-zW/7P1GvapQi9ptZLQnBua1BceGq5cO5zh2kzEzeKgl83ob8EJLtdzsAmHco0LiU
-2Iefb1ZB3O8DRiJrXQcdtfzmguPmOWr5FMHgimIXKUVLlHDEaY4W+7AJ45Zt87S2
-mBihNxpgOcHBmu+OCUtARuO+TEqC5QhPn36pu/DsnXkWrxzTr3DD7//V0iu4xNOj
-p6wnVx6CpY6fIy6XkMesXlpemlnntB6N1btZwiDRkVxqbakP5+rAL3+e7xzlnEH3
-+aV9IusZdWHombQdxly6ib8byafwGxyoi6K777Hl/gWLIrTSgJk=
-=3PYV
+iQIzBAEBCgAdFiEElk6TwJ7kXpBG9luILfCqaigFWCkFAmqAZq8ACgkQLfCqaigF
+WCknURAAmjVMkVNNmAPi4rOAUHqzPA2QBUlzzSq6AyFZeH0EUq9JAag7WWGADB6P
+0xUi/MEEnecX/RxqmPircV8YmNT7n75W7ek2szMisUj5f5YVLS4i/mja1vkLf7Uu
+y3+q9yVpLG+ptpC2RYVoit2gkVpxZmp32z08wP+nwnsJJoQWedQadHvN6yC54oPO
+MSGwPMR9g1RbtKT8HUL9iUfEgozLP2fvStdcktR18ift/vu9pJMuCpHWAnBNgZ2P
+A/ttCmO6CiOnuk6BhBHOSEVTVfV9p4DDYjY6AEWwXKx1urCSFH69PkVGom8zATDt
+BidyFrVmSAd1M2YcS2OWIINOSFjc58zRO21KssqkOkVZ/wG6HGUPmJd3gYqH3khS
+H1kI5IdJNW+1TGx1NkYNsms2ewtFXid32kfRB78ShBtkboLGxwHW15tVTIVH9PyV
+IAjX3fpGmvAO6hST38NGzconvEF2vj/yet406mI4uz9iqho28syvUBJpLzpk2wvi
+/JZj0Rgzd0Zv+QxiUGQZBovAUipzYfHGTUftP5VeQ2iiRJ6OyOaBJj7tIxi+s0tW
+luywGf5XcGdKIb8AZ0ON0OUsfgF/v22lW0wEAyeBxvyg/MGNBTdReU+RIblZBswj
+ctTqJeQLY2XgdL0AEr7QFh6Pqehs2fcgWxbwGF7zlv8IzR87Sa0=
+=lIMc
 -----END PGP SIGNATURE-----
