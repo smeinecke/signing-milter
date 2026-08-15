@@ -52,7 +52,7 @@ case "$1" in
             # shellcheck disable=SC1091
             . /etc/default/signing-milter
         fi
-        socket_path="$(printf '%s' "$OPTIONS" | sed -n 's/.*-s[[:space:]]\+\([^[:space:]]\+\).*/\1/p')"
+        socket_path="$(printf '%s' "$OPTIONS" | tr -d '"' | sed -n 's/.*-s[[:space:]]\+\([^[:space:]]\+\).*/\1/p')"
         if [ -n "$socket_path" ]; then
             case "$socket_path" in
                 unix:*|local:*)

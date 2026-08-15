@@ -35,3 +35,40 @@ jobs:
       - name: Build and run tests in Docker
         run: |
           docker compose -f tests/docker-compose.yml up --build --abort-on-container-exit
+
+  systemd-smoketest:
+    name: Systemd smoke test (${{ matrix.os-version }})
+    runs-on: ubuntu-latest
+    needs: unit-and-integration
+    strategy:
+      fail-fast: false
+      matrix:
+        os-version:
+          - debian:buster
+          - debian:bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build systemd smoke-test image
+        run: |
+          IMAGE_TAG=signing-milter-systemd-$(printf '%s' '${{ matrix.os-version }}' | tr ':' '-')
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+          docker build -f tests/Dockerfile.systemd \
+            -t "$IMAGE_TAG" \
+            --build-arg OS_VERSION=${{ matrix.os-version }} \
+            .
+
+      - name: Start container and run smoke test
+        run: |
+          docker run --rm -d \
+            --name signing-milter-systemd \
+            --privileged --cgroupns=host \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            "$IMAGE_TAG"
+          # Give systemd a moment to settle before starting the service.
+          sleep 5
+          docker exec signing-milter-systemd /src/tests/systemd-smoketest.sh
+
+      - name: Stop systemd container
+        if: always()
+        run: docker stop signing-milter-systemd || true

@@ -1,3 +1,12 @@
+signing-milter (20260815-4) unstable; urgency=medium
+
+  * postinst: strip quotes from OPTIONS before parsing the socket path so
+    custom socket directories are created and owned correctly.
+  * CI: add a systemd smoke test that installs the package and verifies
+    signing-milter starts under systemd.
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Sat, 15 Aug 2026 15:30:00 +0200
+
 signing-milter (20260815-3) unstable; urgency=medium
 
   * Fallback to fchmodat without AT_SYMLINK_NOFOLLOW on kernels/glibc that

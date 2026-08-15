@@ -1,0 +1,53 @@
+# signing-milter - tests/Dockerfile.systemd
+# Build the package and install it, then start under systemd for a smoke test.
+
+ARG OS_VERSION=debian:bookworm
+FROM ${OS_VERSION}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Buster is archived; move to archive.debian.org before apt-get update.
+RUN . /etc/os-release && \
+    if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then \
+        find /etc/apt -name '*.list' -exec \
+            sed -i 's|deb.debian.org|archive.debian.org|g; s|security.debian.org|archive.debian.org|g; /-updates/d' {} +; \
+    fi
+
+# Install build dependencies, packaging tools, and systemd.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    adduser \
+    build-essential \
+    ca-certificates \
+    cmake \
+    debhelper \
+    pkg-config \
+    libcdb-dev \
+    libmilter-dev \
+    libssl-dev \
+    systemd \
+    systemd-sysv \
+    tinycdb \
+    && rm -rf /var/lib/apt/lists/*
+
+# The package postinst sets the socket directory group to postfix if the group
+# exists. Create it explicitly so the ownership check works in the container.
+RUN addgroup --system postfix || true
+
+WORKDIR /src
+COPY . /src
+
+# Build the Debian package (noredis; the target test only needs a working milter).
+RUN cd /src && \
+    dpkg-buildpackage -us -uc -b -d -Ppkg.signing-milter.noredis
+
+# Prepare a custom socket directory like real deployments use, then install the
+# package.  --force-confold preserves a pre-seeded /etc/default/signing-milter
+# so the postinst sees the custom socket path.
+RUN mkdir -p /var/spool/postfix/signing-milter && \
+    printf 'OPTIONS="-s unix:/var/spool/postfix/signing-milter/signing-milter.sock -c postfix -d 5"\n' > /etc/default/signing-milter
+
+RUN dpkg -i --force-confold /signing-milter_[0-9]*_amd64.deb
+
+# systemd must run as PID 1.
+CMD ["/lib/systemd/systemd"]
