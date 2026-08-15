@@ -11,8 +11,24 @@ on:
 
 jobs:
   unit-and-integration:
-    name: Build and test in Docker
+    name: Build and test in Docker (${{ matrix.os-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os-version:
+          - debian:buster
+          - debian:bullseye
+          - debian:bookworm
+          - debian:trixie
+          - ubuntu:focal
+          - ubuntu:jammy
+          - ubuntu:noble
+          - ubuntu:resolute
+    env:
+      OS_VERSION: ${{ matrix.os-version }}
+      WITH_REDIS: ${{ contains(fromJSON('["debian:trixie", "ubuntu:noble", "ubuntu:resolute"]'), matrix.os-version) && 'ON' || 'OFF' }}
+      TEST_COMMAND: ${{ contains(fromJSON('["debian:trixie", "ubuntu:noble", "ubuntu:resolute"]'), matrix.os-version) && '/src/tests/integration/run-redis-test.sh /src/build' || '/bin/true' }}
     steps:
       - uses: actions/checkout@v4
 

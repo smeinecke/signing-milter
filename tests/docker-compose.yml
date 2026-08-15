@@ -9,10 +9,13 @@ services:
     build:
       context: ..
       dockerfile: tests/Dockerfile
+      args:
+        OS_VERSION: ${OS_VERSION:-debian:trixie}
+        WITH_REDIS: ${WITH_REDIS:-ON}
     image: signing-milter-tests
     depends_on:
       - redis
-    command: ["/src/tests/integration/run-redis-test.sh", "/src/build"]
+    command: ${TEST_COMMAND:-/src/tests/integration/run-redis-test.sh /src/build}
     user: root
     environment:
       - REDIS_URI=unix:/data/redis.sock
