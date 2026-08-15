@@ -44,6 +44,34 @@ case "$1" in
         chgrp signing-milter /etc/signing-milter/
         chmod 0750 /etc/signing-milter/
 
+        # Create and secure the milter socket directory.  signing-milter starts
+        # as root and the socket directory must therefore be owned by root
+        # (CWE-367), but the postfix group needs search access.
+        SOCKET_DIR="/run/signing-milter"
+        if [ -f /etc/default/signing-milter ]; then
+            # shellcheck disable=SC1091
+            . /etc/default/signing-milter
+        fi
+        socket_path="$(printf '%s' "$OPTIONS" | sed -n 's/.*-s[[:space:]]\+\([^[:space:]]\+\).*/\1/p')"
+        if [ -n "$socket_path" ]; then
+            case "$socket_path" in
+                unix:*|local:*)
+                    socket_path="${socket_path#*:}"
+                    socket_path="${socket_path#//}"
+                    SOCKET_DIR="$(dirname "$socket_path")"
+                    ;;
+            esac
+        fi
+        if [ -n "$SOCKET_DIR" ]; then
+            mkdir -p "$SOCKET_DIR"
+            if getent group postfix >/dev/null; then
+                chown root:postfix "$SOCKET_DIR" 2>/dev/null || true
+            else
+                chown root:root "$SOCKET_DIR" 2>/dev/null || true
+            fi
+            chmod 0750 "$SOCKET_DIR" 2>/dev/null || true
+        fi
+
         # Migrate old German variable names to the new English ones,
         # preserving their assigned values.
         if [ -f /etc/default/signing-milter ] &&

@@ -2,6 +2,7 @@
 #define _GNU_SOURCE
 
 #include <unistd.h>
+#include <errno.h>
 
 #include "main.h"
 #include <openssl/crypto.h>
@@ -739,10 +740,25 @@ int main(int argc, char** argv) {
         }
 
         if (fchmodat(socket_dirfd, socket_base, socket_mode, AT_SYMLINK_NOFOLLOW) != 0) {
-            logmsg(LOG_ERR, "fchmodat(%s, %s) failed: %s", socket_path, socket_mode_str, strerror(errno));
-            close(socket_dirfd);
-            free(socket_path_copy);
-            exit(EX_SOFTWARE);
+            if (errno == EOPNOTSUPP) {
+                /*
+                 * Some older kernels/glibc combinations reject
+                 * fchmodat(..., AT_SYMLINK_NOFOLLOW) on sockets.
+                 * The directory is already verified to be a safe trust
+                 * boundary, so fall back to a normal fchmodat.
+                 */
+                if (fchmodat(socket_dirfd, socket_base, socket_mode, 0) != 0) {
+                    logmsg(LOG_ERR, "fchmodat(%s, %s) failed: %s", socket_path, socket_mode_str, strerror(errno));
+                    close(socket_dirfd);
+                    free(socket_path_copy);
+                    exit(EX_SOFTWARE);
+                }
+            } else {
+                logmsg(LOG_ERR, "fchmodat(%s, %s) failed: %s", socket_path, socket_mode_str, strerror(errno));
+                close(socket_dirfd);
+                free(socket_path_copy);
+                exit(EX_SOFTWARE);
+            }
         }
 
         close(socket_dirfd);

@@ -1,3 +1,13 @@
+signing-milter (20260815-3) unstable; urgency=medium
+
+  * Fallback to fchmodat without AT_SYMLINK_NOFOLLOW on kernels/glibc that
+    return EOPNOTSUPP when setting socket permissions.
+  * postinst: create and own the milter socket directory as root so the
+    daemon's root-start trust-boundary check passes.
+  * test workflow: build and test across all supported Debian/Ubuntu versions.
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Sat, 15 Aug 2026 15:03:00 +0200
+
 signing-milter (20260815-2) unstable; urgency=medium
 
   * Guard redis_check_field_size so builds with -Ppkg.signing-milter.noredis
