@@ -1,3 +1,14 @@
+signing-milter (20260815-2) unstable; urgency=medium
+
+  * Guard redis_check_field_size so builds with -Ppkg.signing-milter.noredis
+    compile on older distros.
+  * Detect hiredis redisReader->maxelements at configure time and only set it
+    when the field exists.
+  * GitHub Actions: build without Redis on distros whose hiredis is too old
+    for the new guard code (buster, bullseye, bookworm, focal, jammy).
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Sat, 15 Aug 2026 14:30:00 +0200
+
 signing-milter (20260815-1) unstable; urgency=medium
 
   * Replace cron.daily/hourly statistics scripts with systemd timer units.

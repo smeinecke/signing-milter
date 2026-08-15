@@ -2,6 +2,7 @@
 #define _CONFIG_H_INCLUDED_
 #cmakedefine NDEBUG
 #cmakedefine WITH_REDIS
+#cmakedefine HAVE_REDISREADER_MAXELEMENTS
 
 #define STR_PROGVERSION "@STR_PROGVERSION@"
 #endif

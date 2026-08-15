@@ -27,6 +27,7 @@ project(signing-milter
 
 include(GNUInstallDirs)
 include(FindPkgConfig)
+include(CheckStructHasMember)
 
 # ----------------------------------------------------------------------
 # Version string -- derived from git tags so it is not stale on build.
@@ -109,6 +110,11 @@ if(WITH_REDIS)
             message(WARNING "hiredis_ssl not found; rediss:// TLS support disabled")
         endif()
     endif()
+
+    set(CMAKE_REQUIRED_INCLUDES ${HIREDIS_INCLUDE_DIRS})
+    check_struct_has_member(redisReader maxelements hiredis/read.h
+                            HAVE_REDISREADER_MAXELEMENTS)
+    unset(CMAKE_REQUIRED_INCLUDES)
 endif()
 
 # ----------------------------------------------------------------------

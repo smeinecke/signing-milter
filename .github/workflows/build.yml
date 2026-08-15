@@ -67,7 +67,7 @@ jobs:
             if [ "$arch" = "arm64" ]; then
               dpkg --add-architecture arm64
               apt-get update
-              if [ "$flavor" = "debian" ] && [ "$version" = "buster" ]; then
+              if [ "$version" = "buster" ] || [ "$version" = "bullseye" ] || [ "$version" = "bookworm" ] || [ "$version" = "focal" ] || [ "$version" = "jammy" ]; then
                 DEBIAN_FRONTEND=noninteractive apt-get -y install libssl-dev:arm64 tinycdb:arm64 libmilter-dev:arm64 libcdb-dev:arm64
               else
                 DEBIAN_FRONTEND=noninteractive apt-get -y install libssl-dev:arm64 tinycdb:arm64 libmilter-dev:arm64 libcdb-dev:arm64 libhiredis-dev:arm64
@@ -75,7 +75,7 @@ jobs:
             fi
           extra-build-deps: devscripts git dpkg-cross cmake
           before-build-hook: "dch --local ~${{ env.version }} 'GitHub build for ${{ matrix.os-version }}'"
-          buildpackage-opts: ${{ matrix.os-version == 'debian:buster' && '--build=binary --no-sign -d -Ppkg.signing-milter.noredis' || '--build=binary --no-sign -d' }}
+          buildpackage-opts: ${{ contains(fromJSON('["debian:trixie", "ubuntu:noble", "ubuntu:resolute"]'), matrix.os-version) && '--build=binary --no-sign -d' || '--build=binary --no-sign -d -Ppkg.signing-milter.noredis' }}
       - name: Upload deb files
         uses: actions/upload-artifact@v4
         with:

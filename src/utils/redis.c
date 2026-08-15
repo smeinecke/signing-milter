@@ -933,7 +933,9 @@ static int redis_install_guards(redisContext* c) {
     c->funcs = &e->guarded;
     c->reader->fn = &e->guarded_reader_fns;
     c->reader->privdata = e;
+#ifdef HAVE_REDISREADER_MAXELEMENTS
     c->reader->maxelements = REDIS_READER_MAX_ARRAY;
+#endif
     c->reader->maxbuf = REDIS_READER_MAX_BUF_SIZE;
 
     return 0;
@@ -1444,6 +1446,7 @@ void redis_global_cleanup(void) {
 #endif
 }
 
+#ifdef WITH_REDIS
 /*
  * Query the server-reported length of a hash field with HSTRLEN before we
  * request the actual value.  This prevents a compromised or misconfigured
@@ -1487,6 +1490,7 @@ static int redis_check_field_size(redisContext* c, const char* key,
     *out_len = (size_t) len;
     return 0;
 }
+#endif
 
 int redis_lookup_cert(const char* raw_address,
                       char** pem, size_t* pem_len,
