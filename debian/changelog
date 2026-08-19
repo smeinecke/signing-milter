@@ -1,3 +1,14 @@
+signing-milter (20260815-5) unstable; urgency=medium
+
+  * Add new -A option to require an authenticated SMTP/SASL identity.
+  * Default the Debian package to OPTIONS="-A" so authentication remains
+    required by default while allowing legacy unauthenticated signing to be
+    re-enabled by editing /etc/default/signing-milter.
+  * Restore legacy sender-address-only behavior when neither -A nor an
+    auth-signing table (-a/-R) is configured.
+
+ -- Stefan Meinecke <meinecke@greensec.de>  Wed, 19 Aug 2026 18:06:49 +0200
+
 signing-milter (20260815-4) unstable; urgency=medium
 
   * postinst: strip quotes from OPTIONS before parsing the socket path so

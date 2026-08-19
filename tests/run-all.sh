@@ -34,6 +34,9 @@ if python3 -c "import miltertest" 2>/dev/null; then
 
     echo "=== certificate-CN fallback integration tests ==="
     "$SCRIPT_DIR/integration/run-miltertest-cert-fallback.sh" "$BUILD_DIR"
+
+    echo "=== legacy (no auth requirement) integration tests ==="
+    "$SCRIPT_DIR/integration/run-miltertest-legacy.sh" "$BUILD_DIR"
 else
     echo "SKIP: python3-miltertest not available, skipping auth and cert-fallback tests"
 fi

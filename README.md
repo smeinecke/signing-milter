@@ -129,13 +129,23 @@ To allow an authenticated SMTP/SASL user to sign, an `auth-signing-table` can
 be configured with `-a` (local CDB) or `-R` (Redis).  If either option is set,
 that table is authoritative.
 
-If neither `-a` nor `-R` is configured, `signing-milter` falls back to
-certificate-based authorization.  The selected signer must have a certificate
-whose subject contains **exactly one Common Name (CN)**, and that CN must match
-the authenticated SASL identity from `{auth_authen}` exactly (case-sensitive,
+If neither `-a` nor `-R` is configured, `signing-milter` uses the legacy
+sender-address-only behavior: it signs any message for which the signingtable
+contains a certificate, without requiring an authenticated SMTP/SASL identity.
+This is the default behavior for source builds.
+
+The `-A` option makes the milter require an authenticated identity.  When `-A`
+is used without `-a` or `-R`, `signing-milter` falls back to certificate-based
+authorization.  The selected signer must have a certificate whose subject
+contains **exactly one Common Name (CN)**, and that CN must match the
+authenticated SASL identity from `{auth_authen}` exactly (case-sensitive,
 opaque string comparison).  This fallback is intended for deployments where the
 organization's PKI deliberately encodes the SMTP/SASL account identity in the
 certificate CN.
+
+The Debian package enables `-A` by default in
+`/etc/default/signing-milter`.  To restore the legacy unauthenticated behavior
+on a Debian system, edit the defaults file and remove `-A`.
 
 The authenticated identity is read from the libmilter macro `{auth_authen}`.
 This macro contains the SASL login name, which is treated as an **opaque
@@ -150,11 +160,11 @@ behaviour but means a case-sensitive local-part such as `Alice` and `alice`
 is treated as a single signer identity.  If your deployment distinguishes
 local-parts by case, store them as separate lowercased signer identities.
 
-### Certificate-CN fallback (no `-a` / `-R`)
+### Certificate-CN fallback (`-A` without `-a` / `-R`)
 
-Without `-a` or `-R`, the milter uses the selected signer's certificate as the
-authorization source.  The certificate subject must contain exactly one CN, and
-that CN is compared byte-for-byte with `{auth_authen}`.
+With `-A` but without `-a` or `-R`, the milter uses the selected signer's
+certificate as the authorization source.  The certificate subject must contain
+exactly one CN, and that CN is compared byte-for-byte with `{auth_authen}`.
 
 ```text
 {auth_authen} = alice

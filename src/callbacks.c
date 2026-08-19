@@ -272,21 +272,45 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
      */
     logmsg(LOG_DEBUG, "MAIL FROM: '%s' (via %s)", argv[0], daemon_name);
 
-    auth_identity = get_auth_identity(ctx);
+    auth_identity = NULL;
+    if (auth_signing_required()) {
+        auth_identity = get_auth_identity(ctx);
 
-    if (auth_signing_has_explicit_backend()) {
-        /*
-         * Explicit auth tables are authoritative.  Authorize first, then
-         * resolve the signing material only for authorized signers.
-         */
-        auth_rc = auth_signing_authorized(auth_identity, argv[0], NULL);
-        if (auth_rc == -1) {
-            logmsg(LOG_ERR, "callback_envfrom: auth_signing_authorized() failed");
-            free(auth_identity);
-            signer_lookup_cleanup(&lookup);
-            return SMFIS_TEMPFAIL;
-        }
-        if (auth_rc == 1) {
+        if (auth_signing_has_explicit_backend()) {
+            /*
+             * Explicit auth tables are authoritative.  Authorize first, then
+             * resolve the signing material only for authorized signers.
+             */
+            auth_rc = auth_signing_authorized(auth_identity, argv[0], NULL);
+            if (auth_rc == -1) {
+                logmsg(LOG_ERR, "callback_envfrom: auth_signing_authorized() failed");
+                free(auth_identity);
+                signer_lookup_cleanup(&lookup);
+                return SMFIS_TEMPFAIL;
+            }
+            if (auth_rc == 1) {
+                int rc = signer_lookup_cert(argv[0], &lookup);
+                if (rc == -1) {
+                    logmsg(LOG_ERR, "callback_envfrom: signer lookup failed for '%s'", argv[0]);
+                    free(auth_identity);
+                    signer_lookup_cleanup(&lookup);
+                    return SMFIS_TEMPFAIL;
+                }
+                if (rc == 1) {
+                    setup_ready = 1;
+                } else {
+                    deny_reason = 1;
+                    auth_rc = 0;
+                }
+            } else {
+                deny_reason = 0;
+            }
+        } else {
+            /*
+             * Certificate-CN fallback: resolve the certificate before the
+             * private key is loaded, then authorize against the certificate
+             * subject CN.
+             */
             int rc = signer_lookup_cert(argv[0], &lookup);
             if (rc == -1) {
                 logmsg(LOG_ERR, "callback_envfrom: signer lookup failed for '%s'", argv[0]);
@@ -295,18 +319,29 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
                 return SMFIS_TEMPFAIL;
             }
             if (rc == 1) {
-                setup_ready = 1;
+                auth_rc = auth_signing_authorized(auth_identity, argv[0], lookup.cert);
+                if (auth_rc == -1) {
+                    logmsg(LOG_ERR, "callback_envfrom: certificate authorization failed for '%s'", argv[0]);
+                    free(auth_identity);
+                    signer_lookup_cleanup(&lookup);
+                    return SMFIS_TEMPFAIL;
+                }
+                if (auth_rc == 1) {
+                    setup_ready = 1;
+                } else {
+                    deny_reason = 0;
+                    signer_lookup_cleanup(&lookup);
+                    signer_lookup_init(&lookup);
+                }
             } else {
                 deny_reason = 1;
                 auth_rc = 0;
             }
-        } else {
-            deny_reason = 0;
         }
     } else {
         /*
-         * Certificate-CN fallback: resolve the certificate before the private
-         * key is loaded, then authorize against the certificate subject CN.
+         * Legacy sender-address-only behavior: no authentication required.
+         * Resolve the signing material directly from the envelope sender.
          */
         int rc = signer_lookup_cert(argv[0], &lookup);
         if (rc == -1) {
@@ -316,20 +351,7 @@ sfsistat callback_envfrom(SMFICTX* ctx, char** argv) {
             return SMFIS_TEMPFAIL;
         }
         if (rc == 1) {
-            auth_rc = auth_signing_authorized(auth_identity, argv[0], lookup.cert);
-            if (auth_rc == -1) {
-                logmsg(LOG_ERR, "callback_envfrom: certificate authorization failed for '%s'", argv[0]);
-                free(auth_identity);
-                signer_lookup_cleanup(&lookup);
-                return SMFIS_TEMPFAIL;
-            }
-            if (auth_rc == 1) {
-                setup_ready = 1;
-            } else {
-                deny_reason = 0;
-                signer_lookup_cleanup(&lookup);
-                signer_lookup_init(&lookup);
-            }
+            setup_ready = 1;
         } else {
             deny_reason = 1;
             auth_rc = 0;
@@ -595,35 +617,83 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
          * unusable X-Signer must not suppress an already-authorized envelope
          * signer.
          */
-        if (auth_signing_has_explicit_backend()) {
-            auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv, NULL);
-            if (auth_rc == -1) {
-                logmsg(LOG_ERR, "%s: callback_header: X-Signer authorization check failed for '%s'",
-                       ctxdata->queueid, headerv);
-                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                if (ctxdata->cert != NULL)
+        if (auth_signing_required()) {
+            if (auth_signing_has_explicit_backend()) {
+                auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv, NULL);
+                if (auth_rc == -1) {
+                    logmsg(LOG_ERR, "%s: callback_header: X-Signer authorization check failed for '%s'",
+                           ctxdata->queueid, headerv);
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    if (ctxdata->cert != NULL)
+                        return SMFIS_CONTINUE;
+                    ctxdata_cleanup(ctxdata);
+                    ctxdata_free(ctxdata);
+                    (void) smfi_setpriv(ctx, NULL);
+                    return SMFIS_TEMPFAIL;
+                }
+                if (auth_rc == 0) {
+                    logmsg(LOG_NOTICE, "%s: X-Signer '%s' not authorized for authenticated identity '%s'; keeping any authorized envelope signer",
+                           ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
                     return SMFIS_CONTINUE;
-                ctxdata_cleanup(ctxdata);
-                ctxdata_free(ctxdata);
-                (void) smfi_setpriv(ctx, NULL);
-                return SMFIS_TEMPFAIL;
-            }
-            if (auth_rc == 0) {
-                logmsg(LOG_NOTICE, "%s: X-Signer '%s' not authorized for authenticated identity '%s'; keeping any authorized envelope signer",
-                       ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
-                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                return SMFIS_CONTINUE;
-            }
+                }
 
-            if (signer_lookup_cert(headerv, &lookup) != 1) {
-                logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; keeping any authorized envelope signer", ctxdata->queueid, headerv);
-                ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                signer_lookup_cleanup(&lookup);
-                return SMFIS_CONTINUE;
+                if (signer_lookup_cert(headerv, &lookup) != 1) {
+                    logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; keeping any authorized envelope signer", ctxdata->queueid, headerv);
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    signer_lookup_cleanup(&lookup);
+                    return SMFIS_CONTINUE;
+                }
+                setup_ready = 1;
+            } else {
+                /* Certificate-CN fallback: resolve cert before private key. */
+                int rc = signer_lookup_cert(headerv, &lookup);
+                if (rc == -1) {
+                    logmsg(LOG_ERR, "%s: callback_header: signer lookup failed for X-Signer '%s'",
+                           ctxdata->queueid, headerv);
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    signer_lookup_cleanup(&lookup);
+                    if (ctxdata->cert != NULL)
+                        return SMFIS_CONTINUE;
+                    ctxdata_cleanup(ctxdata);
+                    ctxdata_free(ctxdata);
+                    (void) smfi_setpriv(ctx, NULL);
+                    return SMFIS_TEMPFAIL;
+                }
+                if (rc == 1) {
+                    auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv, lookup.cert);
+                    if (auth_rc == -1) {
+                        logmsg(LOG_ERR, "%s: callback_header: X-Signer certificate authorization failed for '%s'",
+                               ctxdata->queueid, headerv);
+                        ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                        signer_lookup_cleanup(&lookup);
+                        if (ctxdata->cert != NULL)
+                            return SMFIS_CONTINUE;
+                        ctxdata_cleanup(ctxdata);
+                        ctxdata_free(ctxdata);
+                        (void) smfi_setpriv(ctx, NULL);
+                        return SMFIS_TEMPFAIL;
+                    }
+                    if (auth_rc == 0) {
+                        logmsg(LOG_NOTICE, "%s: X-Signer '%s' certificate CN does not match authenticated identity '%s'; keeping any authorized envelope signer",
+                               ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
+                        ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                        signer_lookup_cleanup(&lookup);
+                        return SMFIS_CONTINUE;
+                    }
+                    setup_ready = 1;
+                } else {
+                    logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; keeping any authorized envelope signer", ctxdata->queueid, headerv);
+                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
+                    signer_lookup_cleanup(&lookup);
+                    return SMFIS_CONTINUE;
+                }
             }
-            setup_ready = 1;
         } else {
-            /* Certificate-CN fallback: resolve cert before private key. */
+            /*
+             * Legacy X-Signer behavior: no authentication required.
+             * Resolve the signing material directly from the header value.
+             */
             int rc = signer_lookup_cert(headerv, &lookup);
             if (rc == -1) {
                 logmsg(LOG_ERR, "%s: callback_header: signer lookup failed for X-Signer '%s'",
@@ -638,26 +708,6 @@ sfsistat callback_header(SMFICTX* ctx, char* headerf, char* headerv) {
                 return SMFIS_TEMPFAIL;
             }
             if (rc == 1) {
-                auth_rc = auth_signing_authorized(ctxdata->auth_identity, headerv, lookup.cert);
-                if (auth_rc == -1) {
-                    logmsg(LOG_ERR, "%s: callback_header: X-Signer certificate authorization failed for '%s'",
-                           ctxdata->queueid, headerv);
-                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                    signer_lookup_cleanup(&lookup);
-                    if (ctxdata->cert != NULL)
-                        return SMFIS_CONTINUE;
-                    ctxdata_cleanup(ctxdata);
-                    ctxdata_free(ctxdata);
-                    (void) smfi_setpriv(ctx, NULL);
-                    return SMFIS_TEMPFAIL;
-                }
-                if (auth_rc == 0) {
-                    logmsg(LOG_NOTICE, "%s: X-Signer '%s' certificate CN does not match authenticated identity '%s'; keeping any authorized envelope signer",
-                           ctxdata->queueid, headerv, ctxdata->auth_identity ? ctxdata->auth_identity : "(none)");
-                    ctxdata->mailflags |= MF_SIGNER_FROM_HEADER;
-                    signer_lookup_cleanup(&lookup);
-                    return SMFIS_CONTINUE;
-                }
                 setup_ready = 1;
             } else {
                 logmsg(LOG_INFO, "%s: no signingdata for X-Signer %s; keeping any authorized envelope signer", ctxdata->queueid, headerv);

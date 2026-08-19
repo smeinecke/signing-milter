@@ -334,10 +334,13 @@ int main(int argc, char** argv) {
      */
     client_gid = 0;
 
-    while ((c = getopt(argc, argv, "a:bc:d:hfg:k:Il:m:n:p:P:Rr:s:t:u:vxW:C:")) > 0) {
+    while ((c = getopt(argc, argv, "a:Ab:bc:d:hfg:k:Il:m:n:p:P:Rr:s:t:u:vxW:C:")) > 0) {
         switch (c) {
         case 'a': /* auth-signing table CDB filename */
             opt_auth_signing_table = optarg;
+            break;
+        case 'A': /* require authenticated SMTP/SASL */
+            opt_require_auth = 1;
             break;
         case 'b': /* break contentheader */
             logmsg(LOG_INFO, "option -b is ignored for compatibily reasons, you may remove it safely");
