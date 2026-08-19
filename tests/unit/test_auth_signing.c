@@ -109,12 +109,34 @@ static X509* make_test_cert(const char* cn, int second_cn,
     return cert;
 }
 
+static void test_auth_signing_required(void** state) {
+
+    (void) state;
+
+    opt_auth_signing_table = NULL;
+    opt_redis_auth_signing_table = 0;
+    opt_require_auth = 0;
+
+    assert_int_equal(auth_signing_required(), 0);
+
+    opt_require_auth = 1;
+    assert_int_equal(auth_signing_required(), 1);
+
+    opt_require_auth = 0;
+    opt_redis_auth_signing_table = 1;
+    assert_int_equal(auth_signing_required(), 1);
+
+    opt_redis_auth_signing_table = 0;
+    assert_int_equal(auth_signing_required(), 0);
+}
+
 static void test_no_auth_table_is_denied(void** state) {
 
     (void) state;
 
     opt_auth_signing_table = NULL;
     opt_redis_auth_signing_table = 0;
+    opt_require_auth = 0;
 
     assert_int_equal(auth_signing_authorized("alice@example.org", "sender@example.com", NULL), 0);
     assert_int_equal(auth_signing_authorized(NULL, "sender@example.com", NULL), 0);
@@ -466,6 +488,7 @@ static void test_normalize_address_safe(void** state) {
 int main(void) {
 
     const struct CMUnitTest tests[] = {
+        cmocka_unit_test(test_auth_signing_required),
         cmocka_unit_test(test_no_auth_table_is_denied),
         cmocka_unit_test(test_authorized_single_signer),
         cmocka_unit_test(test_multiple_signers_per_auth_identity),

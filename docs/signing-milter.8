@@ -77,7 +77,19 @@ If neither
 .B \-a
 nor
 .B \-R
-is configured,
+is configured and
+.B \-A
+is not used,
+.I signing-milter
+uses the legacy sender-address-only behavior and does not require an
+authenticated SMTP/SASL identity.
+If neither
+.B \-a
+nor
+.B \-R
+is configured but
+.B \-A
+is used,
 .I signing-milter
 falls back to certificate-CN authorization.  The selected signer's certificate
 must contain exactly one subject Common Name (CN), and that CN must match the
@@ -86,6 +98,31 @@ authenticated SASL identity from
 exactly (case-sensitive, opaque string comparison).  Ambiguous certificates
 (no CN or multiple CN attributes) or a CN mismatch result in denial.
 Messages with an unauthorized or missing authentication identity are not signed.
+.TP
+.B \-A
+Require an authenticated SMTP/SASL identity.
+.I signing-milter
+only signs messages when the connection is authenticated and the authenticated
+identity is authorized for the selected signing identity.
+When
+.B \-A
+is used without
+.B \-a
+or
+.B \-R,
+certificate-CN fallback authorization is used.
+When
+.B \-A
+is not used and neither
+.B \-a
+nor
+.B \-R
+is configured, the milter falls back to the legacy sender-address-only
+behavior and signs messages from any envelope sender that has signing material.
+The Debian package enables
+.B \-A
+by default in
+.IR /etc/default/signing-milter .
 .TP
 .B \-h
 Show summary of options and exit.

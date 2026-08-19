@@ -9,9 +9,15 @@ void usage(void) {
     printf("                  to the signing identities it is allowed to use.\n");
     printf("                  When configured, this table is authoritative for\n");
     printf("                  authenticated-sender signing.  If neither -a nor -R\n");
-    printf("                  is configured, the milter falls back to certificate-CN\n");
-    printf("                  authorization.\n");
+    printf("                  is configured and -A is not used, the milter uses\n");
+    printf("                  the legacy sender-address-only behavior and does not\n");
+    printf("                  require an authenticated identity.\n");
     printf("                  default: none\n");
+    printf("  -A              require an authenticated SMTP/SASL identity.\n");
+    printf("                  When set without -a or -R, certificate-CN fallback\n");
+    printf("                  authorization is used.  This is enabled by default\n");
+    printf("                  in the Debian package.\n");
+    printf("                  default: off\n");
     printf("  -h              show help and exit\n");
     printf("  -v              show version and exit\n");
     printf("  -c clientgroup  make a local socket accessible for clientgroup;\n");

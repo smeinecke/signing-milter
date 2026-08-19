@@ -14,6 +14,7 @@
 
 const char* opt_auth_signing_table = NULL;
 int         opt_redis_auth_signing_table = 0;
+int         opt_require_auth = 0;
 
 struct DICT dict_auth_signingtable = {
     "authsigningtable",  /* name       */
@@ -27,6 +28,10 @@ struct DICT dict_auth_signingtable = {
 
 int auth_signing_has_explicit_backend(void) {
     return (opt_auth_signing_table != NULL || opt_redis_auth_signing_table);
+}
+
+int auth_signing_required(void) {
+    return (opt_require_auth || auth_signing_has_explicit_backend());
 }
 
 /*

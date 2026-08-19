@@ -2,6 +2,10 @@
 #DISABLE_HOURLY_STATISTICS_LOGGING='yes'
 #DISABLE_DAILY_STATISTICS_LOGGING='yes'
 
+# Require authenticated SMTP/SASL by default. Remove "-A" to allow legacy
+# unauthenticated sender-address signing on trusted networks.
+OPTIONS="-A"
+
 #OPTIONS="-x"
 # Redis-backed certificate lookup (requires WITH_REDIS at build time):
 #OPTIONS="-x -r redis://127.0.0.1:6379/0 -P signing-milter: -W /etc/signing-milter/passphrase"

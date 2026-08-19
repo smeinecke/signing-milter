@@ -72,10 +72,11 @@ SIGNINGTABLE_CDB="$WORK_DIR/signingtable.cdb"
 } > "$SIGNINGTABLE_TXT"
 cdb -c -m "$SIGNINGTABLE_CDB" "$SIGNINGTABLE_TXT"
 
-# Start the milter without any auth-signing table.
+# Start the milter without any auth-signing table, but with -A so that
+# certificate-CN fallback authorization is required.
 "$BUILD_DIR/signing-milter" -u "$(id -un)" -g "$(id -gn)" -c :relax \
     -s "$MILTER_SOCKET" -m "$SIGNINGTABLE_CDB" \
-    -f -l -d 7 &
+    -A -f -l -d 7 &
 MILTER_PID=$!
 
 # Wait for the socket to appear.

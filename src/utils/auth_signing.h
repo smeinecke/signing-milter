@@ -17,6 +17,13 @@ extern const char* opt_auth_signing_table;
  */
 extern int opt_redis_auth_signing_table;
 
+/*
+ * Require an authenticated SMTP/SASL identity.
+ * When set (-A), or when an explicit auth-signing backend (-a/-R) is
+ * configured, the milter only signs messages for authenticated identities.
+ */
+extern int opt_require_auth;
+
 /* Global CDB auth-signing table, opened when -a is set. */
 extern struct DICT dict_auth_signingtable;
 
@@ -30,6 +37,13 @@ extern struct DICT dict_auth_signingtable;
  * Return 1 if an explicit auth-signing backend (CDB or Redis) is configured.
  */
 extern int auth_signing_has_explicit_backend(void);
+
+/*
+ * Return 1 if the current configuration requires an authenticated SMTP/SASL
+ * identity.  This is true when -A is set, or when an explicit auth-signing
+ * backend (-a or -R) is configured.
+ */
+extern int auth_signing_required(void);
 
 /*
  * Check whether auth_identity (opaque SASL principal) is authorized to use
