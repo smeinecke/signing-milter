@@ -1,5 +1,5 @@
 Package: signing-milter
-Version: 20260815-4~bullseye1
+Version: 20260815-5~bullseye1
 Architecture: amd64
 Maintainer: Andreas Schulze <debian@andreasschulze.de>
 Installed-Size: 139
@@ -9,11 +9,11 @@ Recommends: make
 Homepage: https://signing-milter.org
 Priority: optional
 Section: mail
-Filename: pool/main/s/signing-milter/signing-milter_20260815-4~bullseye1_amd64.deb
-Size: 45296
-SHA256: e33c44e176925e1da3565554c4b55614211c987256152f200e330aacf56cf3d0
-SHA1: d9bf1819d5b0db9b5563811e720c87cb5ada93f6
-MD5sum: 336a7347345ac9233d5c1595d49442c4
+Filename: pool/main/s/signing-milter/signing-milter_20260815-5~bullseye1_amd64.deb
+Size: 45900
+SHA256: a477387ae536486b8a5ca598eeabdb654f12a99cefe18a0ea3b58ad520a31674
+SHA1: e677803a81cb39dd9a7d6350fc2e924bc495d416
+MD5sum: 91ed1aa74a620755d80c67ffe8750734
 Description: Sign email via milter protocol
  signing-milter  uses  the  milter  interface, originally distributed as
  part of version 8.11 of sendmail(8), to  provide  signing  service  for

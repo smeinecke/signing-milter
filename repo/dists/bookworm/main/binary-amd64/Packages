@@ -1,5 +1,5 @@
 Package: signing-milter
-Version: 20260815-4~bookworm1
+Version: 20260815-5~bookworm1
 Architecture: amd64
 Maintainer: Andreas Schulze <debian@andreasschulze.de>
 Installed-Size: 132
@@ -9,11 +9,11 @@ Recommends: make
 Homepage: https://signing-milter.org
 Priority: optional
 Section: mail
-Filename: pool/main/s/signing-milter/signing-milter_20260815-4~bookworm1_amd64.deb
-Size: 41788
-SHA256: caf44b5bb332059a077c94fb5734126b5b252d861a28ba1715b66f15b6270ea8
-SHA1: a6d53641f6aa590b3db9301b99ed87c2ef5a64bd
-MD5sum: dd3c0627005cc96d07505e8aa8a5ccaa
+Filename: pool/main/s/signing-milter/signing-milter_20260815-5~bookworm1_amd64.deb
+Size: 42292
+SHA256: 11fd2b43c6fd28559f5ed3d6396673ffcfc50cfa20ad5421df36f914d2c650fb
+SHA1: 5f3eac72056beee6d974ca78fbcebe5d61d42e47
+MD5sum: 53d59d33504f8f0e901212fa7e2255b9
 Description: Sign email via milter protocol
  signing-milter  uses  the  milter  interface, originally distributed as
  part of version 8.11 of sendmail(8), to  provide  signing  service  for
